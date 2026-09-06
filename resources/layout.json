@@ -1,0 +1,455 @@
+{
+  "id": "classroom-64-v1",
+  "name": "计算机教室",
+  "podium": "bottom",
+  "seats": [
+    {
+      "number": 8,
+      "big_group": 1,
+      "group": "三组",
+      "row": 0,
+      "column": 0
+    },
+    {
+      "number": 7,
+      "big_group": 1,
+      "group": "三组",
+      "row": 1,
+      "column": 0
+    },
+    {
+      "number": 6,
+      "big_group": 1,
+      "group": "二组",
+      "row": 2,
+      "column": 0
+    },
+    {
+      "number": 5,
+      "big_group": 1,
+      "group": "二组",
+      "row": 3,
+      "column": 0
+    },
+    {
+      "number": 4,
+      "big_group": 1,
+      "group": "二组",
+      "row": 4,
+      "column": 0
+    },
+    {
+      "number": 3,
+      "big_group": 1,
+      "group": "一组",
+      "row": 5,
+      "column": 0
+    },
+    {
+      "number": 2,
+      "big_group": 1,
+      "group": "一组",
+      "row": 6,
+      "column": 0
+    },
+    {
+      "number": 1,
+      "big_group": 1,
+      "group": "一组",
+      "row": 7,
+      "column": 0
+    },
+    {
+      "number": 16,
+      "big_group": 1,
+      "group": "三组",
+      "row": 0,
+      "column": 1
+    },
+    {
+      "number": 15,
+      "big_group": 1,
+      "group": "三组",
+      "row": 1,
+      "column": 1
+    },
+    {
+      "number": 14,
+      "big_group": 1,
+      "group": "二组",
+      "row": 2,
+      "column": 1
+    },
+    {
+      "number": 13,
+      "big_group": 1,
+      "group": "二组",
+      "row": 3,
+      "column": 1
+    },
+    {
+      "number": 12,
+      "big_group": 1,
+      "group": "二组",
+      "row": 4,
+      "column": 1
+    },
+    {
+      "number": 11,
+      "big_group": 1,
+      "group": "一组",
+      "row": 5,
+      "column": 1
+    },
+    {
+      "number": 10,
+      "big_group": 1,
+      "group": "一组",
+      "row": 6,
+      "column": 1
+    },
+    {
+      "number": 9,
+      "big_group": 1,
+      "group": "一组",
+      "row": 7,
+      "column": 1
+    },
+    {
+      "number": 24,
+      "big_group": 2,
+      "group": "六组",
+      "row": 0,
+      "column": 0
+    },
+    {
+      "number": 23,
+      "big_group": 2,
+      "group": "六组",
+      "row": 1,
+      "column": 0
+    },
+    {
+      "number": 22,
+      "big_group": 2,
+      "group": "五组",
+      "row": 2,
+      "column": 0
+    },
+    {
+      "number": 21,
+      "big_group": 2,
+      "group": "五组",
+      "row": 3,
+      "column": 0
+    },
+    {
+      "number": 20,
+      "big_group": 2,
+      "group": "五组",
+      "row": 4,
+      "column": 0
+    },
+    {
+      "number": 19,
+      "big_group": 2,
+      "group": "四组",
+      "row": 5,
+      "column": 0
+    },
+    {
+      "number": 18,
+      "big_group": 2,
+      "group": "四组",
+      "row": 6,
+      "column": 0
+    },
+    {
+      "number": 17,
+      "big_group": 2,
+      "group": "四组",
+      "row": 7,
+      "column": 0
+    },
+    {
+      "number": 32,
+      "big_group": 2,
+      "group": "六组",
+      "row": 0,
+      "column": 1
+    },
+    {
+      "number": 31,
+      "big_group": 2,
+      "group": "六组",
+      "row": 1,
+      "column": 1
+    },
+    {
+      "number": 30,
+      "big_group": 2,
+      "group": "五组",
+      "row": 2,
+      "column": 1
+    },
+    {
+      "number": 29,
+      "big_group": 2,
+      "group": "五组",
+      "row": 3,
+      "column": 1
+    },
+    {
+      "number": 28,
+      "big_group": 2,
+      "group": "五组",
+      "row": 4,
+      "column": 1
+    },
+    {
+      "number": 27,
+      "big_group": 2,
+      "group": "四组",
+      "row": 5,
+      "column": 1
+    },
+    {
+      "number": 26,
+      "big_group": 2,
+      "group": "四组",
+      "row": 6,
+      "column": 1
+    },
+    {
+      "number": 25,
+      "big_group": 2,
+      "group": "四组",
+      "row": 7,
+      "column": 1
+    },
+    {
+      "number": 40,
+      "big_group": 3,
+      "group": "九组",
+      "row": 0,
+      "column": 0
+    },
+    {
+      "number": 39,
+      "big_group": 3,
+      "group": "九组",
+      "row": 1,
+      "column": 0
+    },
+    {
+      "number": 38,
+      "big_group": 3,
+      "group": "八组",
+      "row": 2,
+      "column": 0
+    },
+    {
+      "number": 37,
+      "big_group": 3,
+      "group": "八组",
+      "row": 3,
+      "column": 0
+    },
+    {
+      "number": 36,
+      "big_group": 3,
+      "group": "八组",
+      "row": 4,
+      "column": 0
+    },
+    {
+      "number": 35,
+      "big_group": 3,
+      "group": "七组",
+      "row": 5,
+      "column": 0
+    },
+    {
+      "number": 34,
+      "big_group": 3,
+      "group": "七组",
+      "row": 6,
+      "column": 0
+    },
+    {
+      "number": 33,
+      "big_group": 3,
+      "group": "七组",
+      "row": 7,
+      "column": 0
+    },
+    {
+      "number": 48,
+      "big_group": 3,
+      "group": "九组",
+      "row": 0,
+      "column": 1
+    },
+    {
+      "number": 47,
+      "big_group": 3,
+      "group": "九组",
+      "row": 1,
+      "column": 1
+    },
+    {
+      "number": 46,
+      "big_group": 3,
+      "group": "八组",
+      "row": 2,
+      "column": 1
+    },
+    {
+      "number": 45,
+      "big_group": 3,
+      "group": "八组",
+      "row": 3,
+      "column": 1
+    },
+    {
+      "number": 44,
+      "big_group": 3,
+      "group": "八组",
+      "row": 4,
+      "column": 1
+    },
+    {
+      "number": 43,
+      "big_group": 3,
+      "group": "七组",
+      "row": 5,
+      "column": 1
+    },
+    {
+      "number": 42,
+      "big_group": 3,
+      "group": "七组",
+      "row": 6,
+      "column": 1
+    },
+    {
+      "number": 41,
+      "big_group": 3,
+      "group": "七组",
+      "row": 7,
+      "column": 1
+    },
+    {
+      "number": 56,
+      "big_group": 4,
+      "group": "十二",
+      "row": 0,
+      "column": 0
+    },
+    {
+      "number": 55,
+      "big_group": 4,
+      "group": "十二",
+      "row": 1,
+      "column": 0
+    },
+    {
+      "number": 54,
+      "big_group": 4,
+      "group": "十一",
+      "row": 2,
+      "column": 0
+    },
+    {
+      "number": 53,
+      "big_group": 4,
+      "group": "十一",
+      "row": 3,
+      "column": 0
+    },
+    {
+      "number": 52,
+      "big_group": 4,
+      "group": "十一",
+      "row": 4,
+      "column": 0
+    },
+    {
+      "number": 51,
+      "big_group": 4,
+      "group": "十组",
+      "row": 5,
+      "column": 0
+    },
+    {
+      "number": 50,
+      "big_group": 4,
+      "group": "十组",
+      "row": 6,
+      "column": 0
+    },
+    {
+      "number": 49,
+      "big_group": 4,
+      "group": "十组",
+      "row": 7,
+      "column": 0
+    },
+    {
+      "number": 64,
+      "big_group": 4,
+      "group": "十二",
+      "row": 0,
+      "column": 1
+    },
+    {
+      "number": 63,
+      "big_group": 4,
+      "group": "十二",
+      "row": 1,
+      "column": 1
+    },
+    {
+      "number": 62,
+      "big_group": 4,
+      "group": "十一",
+      "row": 2,
+      "column": 1
+    },
+    {
+      "number": 61,
+      "big_group": 4,
+      "group": "十一",
+      "row": 3,
+      "column": 1
+    },
+    {
+      "number": 60,
+      "big_group": 4,
+      "group": "十一",
+      "row": 4,
+      "column": 1
+    },
+    {
+      "number": 59,
+      "big_group": 4,
+      "group": "十组",
+      "row": 5,
+      "column": 1
+    },
+    {
+      "number": 58,
+      "big_group": 4,
+      "group": "十组",
+      "row": 6,
+      "column": 1
+    },
+    {
+      "number": 57,
+      "big_group": 4,
+      "group": "十组",
+      "row": 7,
+      "column": 1
+    }
+  ]
+}

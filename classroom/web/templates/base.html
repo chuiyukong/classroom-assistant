@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="csrf-token" content="{{ csrf }}">
+  <title>{% block title %}课堂助手{% endblock %}</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}">
+</head>
+<body data-mode="{% block mode %}{% endblock %}">
+  <header class="topbar"><div class="brand"><span class="brand-mark">课</span><span>课堂助手<small>让课堂准备更简单</small></span></div><span class="role">{% block role %}{% endblock %}</span></header>
+  <main>
+    {% block controls %}{% endblock %}
+    <section class="room-card" aria-label="座位登记">
+      <div class="room-heading"><div><div class="eyebrow">座位登记</div><h1 id="class-title">正在连接教师机…</h1><p id="round-status">请稍候</p></div><div class="counts"><strong id="count">0</strong><span> / <span id="capacity">64</span> 人已登记</span></div></div>
+      <div class="room-toolbar"><div class="legend"><span><i class="dot available"></i>空位</span><span><i class="dot occupied"></i>已登记</span><span><i class="dot unavailable"></i>设备停用</span><span><i class="dot selected"></i>当前选择</span></div><span id="connection" class="connection" role="status">正在连接</span></div>
+      <p class="hint" id="hint">请按电脑或桌面座位号核对实际位置。</p>
+      <div class="room-scroll"><div id="seat-map" class="seat-map"></div><div class="podium">讲 台<span>请以座位号为准，核对自己实际所在位置</span></div></div>
+      <div class="room-footer"><span id="empty-summary">尚未开始登记</span><span>登记结果自动保存在教师机</span></div>
+    </section>
+    <p id="notice" class="notice" role="status" aria-live="polite"></p>
+    {% block bottom %}{% endblock %}
+  </main>
+  <div id="dialog" class="overlay" hidden>
+    <section class="dialog" role="dialog" aria-modal="true" aria-labelledby="dialog-title">
+      <button id="dialog-close" class="dialog-close" type="button" aria-label="关闭">×</button>
+      <div class="eyebrow" id="dialog-context">确认实际座位</div><h2 id="dialog-title">登记座位</h2>
+      <p id="dialog-help">请确认这就是您当前使用的电脑座位。</p>
+      <form id="seat-form"><label for="student-name">学生姓名</label><input id="student-name" maxlength="30" autocomplete="off" required placeholder="请输入姓名">{% block student_fields %}{% endblock %}<p id="dialog-error" class="error" role="alert"></p><div class="dialog-actions"><button id="clear-seat" class="danger secondary" type="button" hidden>清除登记</button><button id="submit-seat" class="primary" type="submit">确认登记</button></div></form>
+      {% block device_fields %}{% endblock %}
+    </section>
+  </div>
+  <script src="{{ url_for('static', filename='app.js') }}"></script>
+</body>
+</html>

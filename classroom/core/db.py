@@ -1,0 +1,121 @@
+from contextlib import contextmanager
+from datetime import datetime
+from pathlib import Path
+import sqlite3
+
+
+MIGRATIONS = [(1, """
+CREATE TABLE classes (
+ id TEXT PRIMARY KEY, name TEXT NOT NULL UNIQUE, created_at TEXT NOT NULL
+);
+CREATE TABLE layouts (
+ id TEXT PRIMARY KEY, definition TEXT NOT NULL
+);
+CREATE TABLE rounds (
+ id TEXT PRIMARY KEY, class_id TEXT NOT NULL REFERENCES classes(id),
+ layout_id TEXT NOT NULL REFERENCES layouts(id), number INTEGER NOT NULL,
+ opened_at TEXT NOT NULL, closed_at TEXT, is_open INTEGER NOT NULL DEFAULT 1,
+ UNIQUE(class_id, number)
+);
+CREATE UNIQUE INDEX one_open_round ON rounds(is_open) WHERE is_open = 1;
+CREATE TABLE registrations (
+ id TEXT PRIMARY KEY, round_id TEXT NOT NULL REFERENCES rounds(id),
+ seat_no INTEGER NOT NULL, name TEXT NOT NULL, client_id TEXT,
+ updated_at TEXT NOT NULL, UNIQUE(round_id, seat_no), UNIQUE(round_id, client_id)
+);
+CREATE TABLE submissions (
+ round_id TEXT NOT NULL REFERENCES rounds(id), client_id TEXT NOT NULL,
+ request_id TEXT NOT NULL, seat_no INTEGER NOT NULL, name TEXT NOT NULL,
+ registration_id TEXT NOT NULL,
+ PRIMARY KEY(round_id, client_id, request_id)
+);
+CREATE INDEX rounds_class ON rounds(class_id, number DESC);
+"""), (2, """
+ALTER TABLE registrations ADD COLUMN source_ip TEXT;
+ALTER TABLE registrations ADD COLUMN ip_key TEXT;
+ALTER TABLE registrations ADD COLUMN student_id TEXT REFERENCES students(id);
+ALTER TABLE registrations ADD COLUMN student_note TEXT NOT NULL DEFAULT '';
+ALTER TABLE rounds ADD COLUMN archived_at TEXT;
+CREATE TABLE students (
+ id TEXT PRIMARY KEY, class_id TEXT NOT NULL REFERENCES classes(id),
+ name TEXT NOT NULL, name_key TEXT NOT NULL, note TEXT NOT NULL DEFAULT '',
+ created_at TEXT NOT NULL, updated_at TEXT NOT NULL
+);
+CREATE INDEX students_class_name ON students(class_id, name_key);
+CREATE TABLE seat_configs (
+ layout_id TEXT NOT NULL REFERENCES layouts(id), seat_no INTEGER NOT NULL,
+ disabled INTEGER NOT NULL DEFAULT 0 CHECK(disabled IN (0,1)),
+ note TEXT NOT NULL DEFAULT '', updated_at TEXT NOT NULL,
+ PRIMARY KEY(layout_id, seat_no)
+);
+CREATE TABLE classroom_state (
+ singleton INTEGER PRIMARY KEY CHECK(singleton=1),
+ active_class_id TEXT REFERENCES classes(id)
+);
+INSERT INTO classroom_state VALUES (1, (
+ SELECT class_id FROM rounds ORDER BY is_open DESC, rowid DESC LIMIT 1
+));
+UPDATE rounds SET archived_at=COALESCE(closed_at, opened_at)
+ WHERE number < (SELECT MAX(r.number) FROM rounds r WHERE r.class_id=rounds.class_id);
+-- Never guess that old same-name registrations are the same person.
+-- Give every old record an independent identity; current identities are reused
+-- by later registration. The Python migration below assigns normalized keys.
+INSERT INTO students(id, class_id, name, name_key, note, created_at, updated_at)
+ SELECT g.id, r.class_id, g.name, g.name, '', g.updated_at, g.updated_at
+ FROM registrations g JOIN rounds r ON r.id=g.round_id
+ WHERE r.archived_at IS NULL;
+UPDATE registrations SET student_id=id WHERE id IN (SELECT id FROM students);
+CREATE UNIQUE INDEX registration_ip ON registrations(round_id, ip_key) WHERE ip_key IS NOT NULL;
+CREATE UNIQUE INDEX registration_student ON registrations(round_id, student_id) WHERE student_id IS NOT NULL;
+""")]
+
+
+class Database:
+    def __init__(self, path):
+        self.path = Path(path)
+
+    @contextmanager
+    def connect(self, write=False):
+        db = sqlite3.connect(self.path, timeout=15, isolation_level=None)
+        db.row_factory = sqlite3.Row
+        db.execute("PRAGMA foreign_keys=ON")
+        db.execute("PRAGMA busy_timeout=15000")
+        try:
+            if write:
+                db.execute("BEGIN IMMEDIATE")
+            else:
+                db.execute("BEGIN")
+            yield db
+            db.commit()
+        except Exception:
+            db.rollback()
+            raise
+        finally:
+            db.close()
+
+    def migrate(self, skip_backup_for_version=None):
+        with sqlite3.connect(self.path) as db:
+            version = db.execute("PRAGMA user_version").fetchone()[0]
+            if version > MIGRATIONS[-1][0]:
+                raise RuntimeError("数据库版本比程序新，请使用新版程序")
+            if version < MIGRATIONS[-1][0] and self.path.stat().st_size and skip_backup_for_version != MIGRATIONS[-1][0]:
+                backup_dir = self.path.parent / "backups"
+                backup_dir.mkdir(exist_ok=True)
+                stamp = datetime.now().strftime("%Y%m%d-%H%M%S-%f")
+                with sqlite3.connect(backup_dir / f"before-v{version + 1}-{stamp}.sqlite3") as copy:
+                    db.backup(copy)
+            db.execute("PRAGMA journal_mode=WAL")
+            db.execute("PRAGMA synchronous=FULL")
+            for number, sql in MIGRATIONS:
+                if number > version:
+                    try:
+                        db.executescript(f"BEGIN IMMEDIATE;\n{sql}")
+                        if number == 2:
+                            from classroom.students.service import name_key
+                            for sid, name in db.execute("SELECT id, name FROM students").fetchall():
+                                db.execute("UPDATE students SET name_key=? WHERE id=?", (name_key(name), sid))
+                        db.execute(f"PRAGMA user_version={number}")
+                        db.commit()
+                    except Exception:
+                        db.rollback()
+                        raise
