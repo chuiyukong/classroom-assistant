@@ -162,11 +162,11 @@ def test_upgrade_real_v1_shape_preserves_duplicate_names_and_archives(tmp_path):
         db.execute('PRAGMA user_version=1')
     app = create_app(root)
     with app.extensions['database'].connect() as db:
-        assert db.execute('PRAGMA user_version').fetchone()[0] == 2
+        assert db.execute('PRAGMA user_version').fetchone()[0] == 3
         assert db.execute('SELECT count(*) FROM registrations').fetchone()[0] == 3
         assert db.execute('SELECT count(DISTINCT student_id) FROM registrations WHERE round_id=?', ('2' * 32,)).fetchone()[0] == 2
         assert db.execute('PRAGMA foreign_key_check').fetchall() == []
-    assert not list((root / 'backups').glob('*.sqlite3'))
+    assert len(list((root / 'backups').glob('*.sqlite3'))) == 1
     s = app.extensions['seating']
     assert s.active('x')['count'] == 2
     assert not s.get_arrangement('class', '1' * 32)['is_current']

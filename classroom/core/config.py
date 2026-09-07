@@ -4,6 +4,7 @@ from pathlib import Path
 import secrets
 import shutil
 import sys
+import hashlib
 
 
 def resource_dir():
@@ -16,6 +17,16 @@ def prepare_data(data_dir=None):
     root.mkdir(parents=True, exist_ok=True)
     config = root / "config"
     config.mkdir(exist_ok=True)
+    manifest = json.loads((resource_dir() / 'legacy-hashes.json').read_text(encoding='utf-8'))
+    if all((config / n).exists() and hashlib.sha256((config / n).read_bytes()).hexdigest() == h for n, h in manifest.items()):
+        backup = config / 'templates' / 'classroom-64-v1'
+        backup.mkdir(parents=True, exist_ok=True)
+        for name in manifest:
+            shutil.copyfile(config / name, backup / name)
+            shutil.copyfile(resource_dir() / name, config / name)
+    legacy = config / 'templates' / 'classroom-64-v1'
+    if not legacy.exists():
+        shutil.copytree(resource_dir() / 'templates' / 'classroom-64-v1', legacy)
     for name in ("layout.json", "excel-template.json", "seat-template.xlsx"):
         target = config / name
         if not target.exists():

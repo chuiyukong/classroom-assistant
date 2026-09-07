@@ -74,14 +74,23 @@ def run():
             current = request('/api/v1/teacher/classes/' + cls['id'] + '/rounds', 'POST', {})
             request('/api/v1/teacher/rounds/' + current['round']['id'] + '/seats/1', 'PUT', {'name': '测试同学'})
             workbook = load_workbook(BytesIO(request('/api/v1/teacher/classes/' + cls['id'] + '/export', raw=True)))
-            assert workbook['Sheet1']['D14'].value == '测试同学'
-            assert workbook['Sheet1']['E17'].value == 1
-            config_url = '/api/v1/teacher/layouts/classroom-64-v1/seats/2/config'
+            assert workbook['Sheet1']['D15'].value == '测试同学'
+            assert workbook['Sheet1']['E18'].value == 1
+            config_url = '/api/v1/teacher/layouts/classroom-64-v2/seats/2/config'
             request(config_url, 'PUT', {'disabled': True, 'note': '设备备注'})
             state = request('/api/v1/student/state')
             assert next(c for c in state['seat_configs'] if c['seat_no'] == 2)['disabled']
             assert '设备备注' not in json.dumps(state, ensure_ascii=False)
             assert request('/api/v1/teacher/info')['version'] == VERSION
+            assert b'modules.js' in request('/teacher/attendance', raw=True)
+            request('/api/v1/teacher/rounds/' + current['round']['id'] + '/close', 'POST', {})
+            lesson = request('/api/v1/teacher/lessons', 'POST', {'round_id': current['round']['id']})
+            lid = lesson['lesson']['id']
+            assert request('/api/v1/teacher/rollcall/' + lid, 'POST', {})['source'] == 'seating'
+            request('/api/v1/teacher/lessons/' + lid + '/open', 'POST', {})
+            request('/api/v1/teacher/lessons/' + lid + '/students/' + lesson['entries'][0]['student_id'], 'PUT', {'status': 'present', 'seat_no':64})
+            assert request('/api/v1/teacher/lessons/' + lid)['counts']['actual'] == 1
+            assert request('/api/v1/teacher/lessons/' + lid + '/export', raw=True).startswith(b'\xef\xbb\xbf')
             print('Packaged executable passed: isolated startup, bundled assets/templates, local authentication, class/round creation, seat correction, Excel export.')
         finally:
             # PyInstaller onefile creates a child; stop only this owned process tree.

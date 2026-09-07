@@ -1,5 +1,15 @@
 # 维护、数据库与跨账号交接
 
+## 1.2.0 维护更新
+
+- 当前 schema 3，升级前自动 SQLite backup。旧 schema 2 跳过备份例外不适用于这次升级。
+- 新增 lessons（课堂与名单来源）、attendance_entries（状态/临时座位/签到）、attendance_leave（长期请假）、rollcall_draws（点名结果）；classes.deleted_at 为回收站标记。名单快照里的 student_id 保留原记录身份，历史只读。
+- 使用 docs/1.2.0使用指南.md；新模块浏览器验证命令为 `.venv\Scripts\python.exe scripts\check_modules_browser.py`，与原 check_browser.py 一起执行。
+- 原装配置自动升级到新版 16 小组模板；原三份配置备份在 config/templates/classroom-64-v1，用户自行修改的配置不覆盖。此情况需要维护者检查三份配置、备份并选择匹配布局版本后升级；不要只覆盖 xlsx 留下旧映射。
+- 仅当前安排切换 v2，旧存档继续使用旧模板；同一机房的 v1/v2 设备设置统一读取当前 v2。模板升级与数据库升级是两个独立步骤，失败时保留目录用于排查，不删除用户资料。
+- 回收站不是永久删除；恢复保留身份与历史，不自动重开登记/课堂。同名班级含回收站都保持唯一，可使用学期前缀。
+- AI 模块尚未实现，密钥不应写入 settings.json 或仓库，后续按独立方案实现本机安全存储。
+
 ## 数据在哪里
 
 默认目录 `%LOCALAPPDATA%\ClassroomAssistant`，启动窗口“打开数据目录”可直接查看。`classroom.sqlite3` 确实是主数据库；`--data-dir` 或 `CLASSROOM_DATA_DIR` 会改变位置。程序目录内的 resources 是初始模板，日常配置在数据目录的 config 下。

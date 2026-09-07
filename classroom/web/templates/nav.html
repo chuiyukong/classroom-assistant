@@ -1,0 +1,5 @@
+<nav class="module-nav" aria-label="课堂功能">
+  <a href="{{ '/teacher' if teacher else '/' }}">在线选座</a>
+  <a href="{{ '/teacher/attendance' if teacher else '/attendance' }}">考勤签到</a>
+  {% if teacher %}<a href="/teacher/rollcall">随机点名</a><a href="/teacher/data">班级数据管理</a>{% endif %}
+</nav>

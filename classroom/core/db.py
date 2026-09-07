@@ -70,6 +70,29 @@ CREATE UNIQUE INDEX registration_student ON registrations(round_id, student_id) 
 """)]
 
 
+MIGRATIONS.append((3, """
+ALTER TABLE classes ADD COLUMN deleted_at TEXT;
+CREATE TABLE lessons (
+ id TEXT PRIMARY KEY, class_id TEXT NOT NULL REFERENCES classes(id), round_id TEXT NOT NULL,
+ class_name TEXT NOT NULL, started_at TEXT NOT NULL, ended_at TEXT,
+ attendance_started_at TEXT, attendance_closed_at TEXT, late_after INTEGER NOT NULL DEFAULT 5
+);
+CREATE UNIQUE INDEX one_live_lesson ON lessons((1)) WHERE ended_at IS NULL;
+CREATE TABLE attendance_entries (
+ lesson_id TEXT NOT NULL REFERENCES lessons(id), student_id TEXT NOT NULL,
+ name TEXT NOT NULL, original_seat INTEGER NOT NULL, seat_no INTEGER,
+ status TEXT NOT NULL DEFAULT 'pending', signed_at TEXT, late_seconds INTEGER NOT NULL DEFAULT 0,
+ source_ip TEXT, client_id TEXT, PRIMARY KEY(lesson_id, student_id),
+ UNIQUE(lesson_id, seat_no), UNIQUE(lesson_id, source_ip), UNIQUE(lesson_id, client_id)
+);
+CREATE TABLE attendance_leave (student_id TEXT PRIMARY KEY, class_id TEXT NOT NULL, updated_at TEXT NOT NULL);
+CREATE TABLE rollcall_draws (
+ id TEXT PRIMARY KEY, lesson_id TEXT NOT NULL REFERENCES lessons(id), student_id TEXT NOT NULL,
+ name TEXT NOT NULL, seat_no INTEGER NOT NULL, source TEXT NOT NULL, created_at TEXT NOT NULL
+);
+"""))
+
+
 class Database:
     def __init__(self, path):
         self.path = Path(path)

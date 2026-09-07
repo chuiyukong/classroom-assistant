@@ -9,7 +9,8 @@ class SeatConfigService:
         self.database, self.layouts = database, layouts
 
     def read(self, db, layout_id):
-        stored = {r['seat_no']: dict(r) for r in db.execute('SELECT * FROM seat_configs WHERE layout_id=?', (layout_id,))}
+        physical_id = 'classroom-64-v2' if layout_id == 'classroom-64-v1' and self.layouts.current['id'] == 'classroom-64-v2' else layout_id
+        stored = {r['seat_no']: dict(r) for r in db.execute('SELECT * FROM seat_configs WHERE layout_id=?', (physical_id,))}
         return {s['number']: stored.get(s['number'], {'seat_no': s['number'], 'disabled': False, 'note': ''})
                 for s in self.layouts.get(layout_id, db)['seats']}
 

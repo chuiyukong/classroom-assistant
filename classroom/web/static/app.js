@@ -66,6 +66,7 @@
       closeDialog(); pending = null;
       if (!teacher) { notice(data.round && data.round.is_open ? '新登记已开始，请重新核对座位并登记。' : '当前安排已更新，请以座位图为准。'); }
     }
+    text('active-title', '在线选座系统 · ' + (teacher ? (classNames[data.active_class_id] || '尚未选择上课班级') : (data['class'] ? data['class'].name : '等待上课')));
     state = data; buildMap(data.layout); text('capacity', data.layout.seats.length); text('count', data.count);
     text('class-title', data['class'] ? data['class'].name : (teacher ? '请选择或新建班级' : '等待教师开启登记'));
     var round = data.round;

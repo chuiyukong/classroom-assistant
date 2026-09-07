@@ -1,9 +1,8 @@
 {% extends "base.html" %}
-{% block title %}教师管理 · 课堂助手{% endblock %}
+{% block title %}在线选座系统 · 教师管理{% endblock %}
 {% block mode %}teacher{% endblock %}
 {% block role %}教师管理 · 本机专用{% endblock %}
 {% block controls %}
-  <section class="intro"><h2>今天的课堂，从这里开始。</h2><p>选择班级，开放登记，再通过极域统一打开学生网址。</p></section>
   <section class="teacher-panel" aria-label="班级与登记管理">
     <div class="control-row"><div class="field"><label for="class-select">查看班级</label><select id="class-select"><option value="">请选择班级</option></select></div><form id="class-form" class="new-class"><label for="class-name">新建班级</label><div class="inline"><input id="class-name" required maxlength="40" placeholder="例如：高一（3）班"><button type="submit" class="secondary">添加班级</button></div></form><div class="field rounds-field"><label for="round-select">当前安排 / 历史存档</label><select id="round-select"><option value="">当前安排</option></select></div></div>
     <div class="control-row actions"><button id="publish-class" class="secondary" disabled>设为当前上课班级</button><button id="start-round" class="primary" disabled>发起新登记</button><button id="close-round" class="secondary" disabled>结束登记</button><button id="export" class="secondary" disabled>导出 Excel</button><button id="student-notes" class="secondary" disabled>学生备注</button></div>

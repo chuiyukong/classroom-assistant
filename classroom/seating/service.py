@@ -24,6 +24,11 @@ class SeatingService:
         self.database, self.layouts, self.limit_ip = database, layouts, limit_ip
         self.seats = SeatConfigService(database, layouts)
         self.students = StudentService(database)
+        if layouts.current['id'] == 'classroom-64-v2':
+            with database.connect(write=True) as db:
+                # Same physical 64 seats; only current display groups/template changed.
+                # Archived layouts are immutable and retain the original export.
+                db.execute("UPDATE rounds SET layout_id='classroom-64-v2' WHERE layout_id='classroom-64-v1' AND archived_at IS NULL")
 
     def rounds(self, class_id):
         with self.database.connect() as db:
@@ -86,8 +91,13 @@ class SeatingService:
                 config.pop('updated_at', None)
             return result
 
-    def get_current_arrangement(self):
+    def get_current_arrangement(self, connection=None):
         """Shared teacher-side context for future attendance / roll call."""
+        if connection is not None:
+            db = connection
+            cid = db.execute('SELECT active_class_id FROM classroom_state WHERE singleton=1').fetchone()[0]
+            row = db.execute('SELECT * FROM rounds WHERE class_id=? ORDER BY number DESC LIMIT 1', (cid,)).fetchone() if cid else None
+            return self._arrangement(db, row) if row else self._empty(db, cid)
         with self.database.connect() as db:
             cid = db.execute('SELECT active_class_id FROM classroom_state WHERE singleton=1').fetchone()[0]
             row = db.execute('SELECT * FROM rounds WHERE class_id=? ORDER BY number DESC LIMIT 1', (cid,)).fetchone() if cid else None
@@ -191,10 +201,15 @@ class SeatingService:
 
     @staticmethod
     def _class(db, class_id):
-        row = db.execute('SELECT * FROM classes WHERE id=?', (class_id,)).fetchone()
+        row = db.execute('SELECT * FROM classes WHERE id=? AND deleted_at IS NULL', (class_id,)).fetchone()
         if not row:
             raise AppError('班级不存在', 404)
         return row
+
+    def retire_classes(self, db, ids):
+        for cid in ids:
+            db.execute('UPDATE rounds SET is_open=0, closed_at=COALESCE(closed_at,?) WHERE class_id=?', (timestamp(), cid))
+            db.execute('UPDATE classroom_state SET active_class_id=NULL WHERE active_class_id=?', (cid,))
 
     @staticmethod
     def _round(db, round_id):
@@ -203,6 +218,7 @@ class SeatingService:
         row = db.execute('SELECT * FROM rounds WHERE id=?', (round_id,)).fetchone()
         if not row:
             raise AppError('登记或存档不存在', 404)
+        SeatingService._class(db, row['class_id'])
         return row
 
     @staticmethod

@@ -56,7 +56,11 @@ class ExcelExportService:
         data = self.seating.get_arrangement(class_id, round_id)
         if not data["round"]:
             raise AppError("该班尚未开始登记")
-        cfg = json.loads((self.config_dir / "excel-template.json").read_text(encoding="utf-8"))
+        directory = self.config_dir
+        cfg = json.loads((directory / "excel-template.json").read_text(encoding="utf-8"))
+        if cfg['layout_id'] != data['layout']['id'] and data['layout']['id'] == 'classroom-64-v1':
+            directory = directory / 'templates' / 'classroom-64-v1'
+            cfg = json.loads((directory / 'excel-template.json').read_text(encoding='utf-8'))
         if cfg["layout_id"] != data["layout"]["id"]:
             raise AppError("该历史布局需要对应的 Excel 模板配置", 409, "template_mismatch")
         mapping = cfg["seat_cells"]
@@ -64,7 +68,7 @@ class ExcelExportService:
         if set(mapping) != numbers or len(set(mapping.values())) != len(numbers):
             raise AppError("模板座位映射不完整或重复", 500, "template_invalid")
         names = {str(r["seat_no"]): r["name"] for r in data["registrations"]}
-        path = (self.config_dir / cfg["file"]).resolve()
+        path = (directory / cfg["file"]).resolve()
         if not path.is_relative_to(self.config_dir.resolve()):
             raise AppError("模板路径必须位于配置目录", 500)
         output = BytesIO()

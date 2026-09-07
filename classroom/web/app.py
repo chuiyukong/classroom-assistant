@@ -17,6 +17,10 @@ from classroom.exports.excel import ExcelExportService
 from classroom.layouts.service import LayoutService
 from classroom.seating.service import SeatingService, UNSET
 from classroom.version import VERSION
+from classroom.attendance.service import AttendanceService, STATUSES
+from classroom.rollcall.service import RollCallService
+import csv
+from io import StringIO, BytesIO
 
 
 def create_app(data_dir=None, bootstrap_key=None):
@@ -42,6 +46,9 @@ def create_app(data_dir=None, bootstrap_key=None):
         raise ValueError('limit_one_registration_per_ip 必须为 true 或 false')
     seating = SeatingService(database, layouts, limit_ip=limit_ip)
     exports = ExcelExportService(seating, root / "config")
+    attendance = AttendanceService(database, seating)
+    rollcall = RollCallService(database, attendance)
+    app.extensions.update(attendance=attendance, rollcall=rollcall)
     app.extensions.update(database=database, layouts=layouts, classes=classes, seating=seating, exports=exports,
                           students=seating.students, seat_configs=seating.seats)
 
@@ -52,7 +59,7 @@ def create_app(data_dir=None, bootstrap_key=None):
 
     @app.before_request
     def guard():
-        teacher = request.path == "/teacher" or request.path.startswith("/api/v1/teacher/")
+        teacher = request.path.startswith("/teacher") or request.path.startswith("/api/v1/teacher/")
         if teacher and not teacher_origin():
             raise AppError("教师管理仅允许在教师机本地打开", 403, "teacher_local_only")
         if request.path.startswith("/api/v1/teacher/") and not session.get("teacher"):
@@ -165,7 +172,7 @@ def create_app(data_dir=None, bootstrap_key=None):
 
     @app.get("/api/v1/teacher/classes")
     def list_classes():
-        return jsonify(classes=classes.list(), active_class_id=seating.get_current_arrangement()['active_class_id'])
+        return jsonify(classes=classes.list(request.args.get('deleted') == '1'), active_class_id=seating.get_current_arrangement()['active_class_id'])
 
     @app.post("/api/v1/teacher/classes")
     def new_class():
@@ -202,5 +209,93 @@ def create_app(data_dir=None, bootstrap_key=None):
         output, filename = exports.export(class_id, request.args.get("round_id"))
         return send_file(output, as_attachment=True, download_name=filename,
                          mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+
+    @app.get('/teacher/<module>')
+    def module_page(module):
+        if module not in ('attendance', 'rollcall', 'data'):
+            raise AppError('页面不存在', 404)
+        if not session.get('teacher'):
+            raise AppError('请从启动窗口打开教师管理', 403)
+        return render_template('module.html', csrf=session['csrf'], module=module, teacher=True)
+
+    @app.get('/attendance')
+    def attendance_page():
+        init_session()
+        return render_template('module.html', csrf=session['csrf'], module='attendance', teacher=False)
+
+    @app.post('/api/v1/teacher/classes/manage')
+    def manage_classes():
+        data = body()
+        if data.get('action') not in ('delete', 'restore'):
+            raise AppError('管理操作无效')
+        ids = data.get('ids')
+        with database.connect(write=True) as db:
+            classes.set_deleted(db, ids, data['action'] == 'delete')
+            if data['action'] == 'delete':
+                seating.retire_classes(db, ids)
+                attendance.retire_classes(db, ids)
+        return jsonify(ok=True)
+
+    @app.get('/api/v1/teacher/lessons/current')
+    def lesson_current():
+        return jsonify(attendance.state())
+
+    @app.post('/api/v1/teacher/lessons')
+    def lesson_start():
+        data = body()
+        return jsonify(attendance.start(data.get('round_id'), data.get('late_after', 5))), 201
+
+    @app.get('/api/v1/teacher/lessons')
+    def lesson_history():
+        return jsonify(lessons=attendance.history(request.args.get('class_id'), request.args.get('day')))
+
+    @app.get('/api/v1/teacher/lessons/<lid>')
+    def lesson_detail(lid):
+        return jsonify(attendance.detail(lid))
+
+    @app.post('/api/v1/teacher/lessons/<lid>/<action>')
+    def lesson_action(lid, action):
+        body()
+        return jsonify(attendance.action(lid, action))
+
+    @app.put('/api/v1/teacher/lessons/<lid>/students/<sid>')
+    def attendance_correct(lid, sid):
+        data = body()
+        if data.get('status') == 'present':
+            return jsonify(attendance.checkin(lid, sid, data.get('seat_no'), teacher=True))
+        attendance.mark(lid, sid, data.get('status'))
+        return jsonify(ok=True)
+
+    @app.get('/api/v1/student/attendance')
+    def student_attendance():
+        init_session()
+        return jsonify(attendance.state(True, request.remote_addr, session['client_id']))
+
+    @app.post('/api/v1/student/attendance')
+    def student_checkin():
+        data = body()
+        return jsonify(attendance.checkin(data.get('lesson_id'), data.get('student_id'), data.get('seat_no'), request.remote_addr, session['client_id']))
+
+    @app.post('/api/v1/teacher/rollcall/<lid>')
+    def draw(lid):
+        body()
+        return jsonify(rollcall.draw(lid))
+
+    @app.get('/api/v1/teacher/rollcall/<lid>')
+    def draws(lid):
+        return jsonify(draws=rollcall.history(lid))
+
+    @app.get('/api/v1/teacher/lessons/<lid>/export')
+    def attendance_export(lid):
+        data = attendance.detail(lid)
+        stream = StringIO(newline='')
+        writer = csv.writer(stream)
+        writer.writerow(['班级','上课时间','签到开始','学生编号','姓名','原座位','签到座位','考勤状态','签到时间','迟到秒数'])
+        def safe(value):
+            value = str(value or '')
+            return "'" + value if value.lstrip().startswith(('=', '+', '-', '@')) else value
+        for r in data['entries']:
+            writer.writerow([safe(data['lesson']['class_name']), data['lesson']['started_at'], data['lesson']['attendance_started_at'], r['student_id'], safe(r['name']), r['original_seat'], r['seat_no'], STATUSES[r['status']] if data['lesson']['attendance_started_at'] else '未开展考勤', r['signed_at'], r['late_seconds']])
+        return send_file(BytesIO(stream.getvalue().encode('utf-8-sig')), as_attachment=True, download_name='考勤日志_' + lid[:8] + '.csv', mimetype='text/csv; charset=utf-8')
 
     return app

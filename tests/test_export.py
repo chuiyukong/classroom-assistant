@@ -21,7 +21,7 @@ def test_all_64_cells_and_template_parts_preserved(app, services, active):
         assert sheet[cfg['seat_cells'][str(n)]].value == '同学' + str(n)
         assert sheet[cfg['number_cells'][str(n)]].value == n
     assert sheet['C3'].value == '高一（3）班  小组座位表'
-    assert sheet['E17'].value == 64
+    assert sheet['E18'].value == 64
     assert sheet.merged_cells == original['Sheet1'].merged_cells
     assert sheet.page_setup == original['Sheet1'].page_setup
     assert sheet.page_margins == original['Sheet1'].page_margins
@@ -42,7 +42,7 @@ def test_names_are_literal_text_and_empty_seats_stay_empty(app, services, active
         services[1].correct(active[1]['id'], n, name)
     output, _ = app.extensions['exports'].export(active[0]['id'])
     sheet = load_workbook(output)['Sheet1']
-    for name, cell in zip(values, ['D14', 'D13', 'D12', 'D10', 'D9']):
+    for name, cell in zip(values, ['D15', 'D14', 'D12', 'D11', 'D9']):
         assert sheet[cell].value == name and sheet[cell].data_type == 's'
     assert sheet['X5'].value in ('', None)
-    assert sheet['E17'].value == 5
+    assert sheet['E18'].value == 5

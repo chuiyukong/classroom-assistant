@@ -15,6 +15,9 @@ class LayoutService:
             if row and row[0] != definition:
                 raise ValueError("布局内容已变更，请同时修改 layout.json 的 id，以保留历史布局")
             db.execute("INSERT OR IGNORE INTO layouts VALUES (?, ?)", (self.current["id"], definition))
+            if not row and self.current['id'] == 'classroom-64-v2':
+                db.execute('''INSERT OR IGNORE INTO seat_configs SELECT ?,seat_no,disabled,note,updated_at
+                    FROM seat_configs WHERE layout_id='classroom-64-v1' ''', (self.current['id'],))
 
     def get(self, layout_id, connection):
         row = connection.execute("SELECT definition FROM layouts WHERE id=?", (layout_id,)).fetchone()
