@@ -1,4 +1,4 @@
-"""Lesson snapshots and attendance. Never updates the seating module's records."""
+"""Lesson snapshots and attendance; fixed-seat changes go through seating services."""
 from datetime import datetime, timezone, timedelta
 from uuid import uuid4
 from classroom.classes.service import timestamp
@@ -32,10 +32,10 @@ class AttendanceService:
             if data['round']['is_open']:
                 raise AppError('请先结束座位登记，再开始本节课', 409)
             now = timestamp()
-            db.execute("UPDATE attendance_entries SET status='absent' WHERE status='pending' AND lesson_id IN (SELECT id FROM lessons WHERE ended_at IS NULL AND attendance_started_at IS NOT NULL)")
+            db.execute("UPDATE attendance_entries SET status='absent',recheckin_allowed=0 WHERE status='pending' AND lesson_id IN (SELECT id FROM lessons WHERE ended_at IS NULL AND attendance_started_at IS NOT NULL)")
             db.execute('UPDATE lessons SET ended_at=?, attendance_closed_at=CASE WHEN attendance_started_at IS NOT NULL THEN COALESCE(attendance_closed_at,?) END WHERE ended_at IS NULL', (now, now))
             lid = uuid4().hex
-            db.execute('INSERT INTO lessons(id,class_id,round_id,class_name,started_at,late_after,layout_id) VALUES (?,?,?,?,?,?,?)', (lid, data['class']['id'], expected_round_id, data['class']['name'], now, late_after, data['layout']['id']))
+            db.execute('INSERT INTO lessons(id,class_id,round_id,class_name,started_at,late_after,layout_id,grade,year,semester) VALUES (?,?,?,?,?,?,?,?,?,?)', (lid, data['class']['id'], expected_round_id, data['class']['name'], now, late_after, data['layout']['id'], data['class'].get('grade',''), data['class'].get('year',0), data['class'].get('semester','')))
             for r in data['registrations']:
                 if not r['student_id']:
                     raise AppError('名单缺少学生编号，请重新登记', 409)
@@ -62,7 +62,7 @@ class AttendanceService:
                 db.execute('UPDATE lessons SET attendance_started_at=?,attendance_deadline=? WHERE id=?', (now, deadline, lid))
             elif action in ('close', 'end'):
                 if lesson['attendance_started_at']:
-                    db.execute("UPDATE attendance_entries SET status='absent' WHERE lesson_id=? AND status='pending'", (lid,))
+                    db.execute("UPDATE attendance_entries SET status='absent',recheckin_allowed=0 WHERE lesson_id=? AND status='pending'", (lid,))
                     db.execute('UPDATE lessons SET attendance_closed_at=COALESCE(attendance_closed_at,?) WHERE id=?', (now, lid))
                 if action == 'end':
                     db.execute('UPDATE lessons SET ended_at=? WHERE id=?', (now, lid))
@@ -78,7 +78,7 @@ class AttendanceService:
         lesson = db.execute('SELECT * FROM lessons WHERE id=?', (lid,)).fetchone()
         if not lesson:
             raise AppError('课堂记录不存在', 404)
-        rows = [dict(r) for r in db.execute('SELECT student_id,name,original_seat,seat_no,status,signed_at,late_seconds,move_reason FROM attendance_entries WHERE lesson_id=? ORDER BY original_seat', (lid,))]
+        rows = [dict(r) for r in db.execute('SELECT student_id,name,original_seat,seat_no,status,signed_at,late_seconds,move_reason,source_ip,recheckin_allowed,first_signed_at FROM attendance_entries WHERE lesson_id=? ORDER BY original_seat', (lid,))]
         counts = {s: sum(r['status'] == s for r in rows) for s in STATUSES}
         counts.update(expected=len(rows), actual=counts['present'] + counts['late'])
         current = self.current(db)
@@ -99,9 +99,10 @@ class AttendanceService:
                 rows = result['entries']
                 result.pop('counts')
                 result.pop('change_requests')
-                result['entries'] = [{'student_id': r['student_id'], 'name': r['name'], 'original_seat': r['original_seat'], 'seat_no': r['seat_no'], 'status': r['status'] if r['status'] in ('present','late','long_leave') else 'pending'} for r in rows]
+                result['entries'] = [{'student_id': r['student_id'], 'name': r['name'], 'original_seat': r['original_seat'], 'seat_no': r['seat_no'], 'status': r['status'], 'recheckin_allowed': bool(r['recheckin_allowed'])} for r in rows]
                 own = db.execute('SELECT student_id FROM attendance_entries WHERE lesson_id=? AND (source_ip=? OR client_id=?)', (lesson['id'], normalize_ip(ip), client_id)).fetchone()
                 result['my_student_id'] = own[0] if own else None
+                result['recheckin_available'] = any(r['recheckin_allowed'] and r['status']=='pending' for r in rows)
                 data = self.seating.get_current_arrangement(db)
                 disabled = {s['seat_no'] for s in data['seat_configs'] if s['disabled']}
                 occupied = {r['seat_no'] for r in rows if r['seat_no'] is not None}
@@ -113,7 +114,7 @@ class AttendanceService:
             raise AppError('请选择名单中的姓名和实际座位')
         with self.database.connect(write=True) as db:
             lesson = self.require_current(db, lid)
-            if not lesson['attendance_started_at'] or (lesson['attendance_closed_at'] and not teacher):
+            if not lesson['attendance_started_at']:
                 raise AppError('签到尚未开始或已经结束', 409)
             if name is not None:
                 if not isinstance(name, str) or not name.strip() or len(name)>30:
@@ -127,7 +128,9 @@ class AttendanceService:
             r = db.execute('SELECT * FROM attendance_entries WHERE lesson_id=? AND student_id=?', (lid, sid)).fetchone()
             if not r:
                 raise AppError('该学生不在本节课座位名单中', 409)
-            source_ip = normalize_ip(ip) if not teacher else None
+            if not teacher and lesson['attendance_closed_at'] and not (r['status']=='pending' and r['recheckin_allowed']):
+                raise AppError('签到已结束；仅教师指定重新签到的学生可以提交',409)
+            source_ip = normalize_ip(ip) if not teacher else (r['source_ip'] if r['seat_no']==seat else None)
             if not teacher and r['signed_at']:
                 if r['seat_no'] == seat and (r['source_ip'] == source_ip or r['client_id'] == client_id):
                     return {'accepted': True, 'duplicate': True}
@@ -147,18 +150,19 @@ class AttendanceService:
             if db.execute('SELECT 1 FROM attendance_entries WHERE lesson_id=? AND seat_no=? AND student_id!=?', (lid, seat, sid)).fetchone():
                 raise AppError('该座位已有同学签到，请选择实际空位', 409)
             now = timestamp()
-            elapsed = max(0, int((datetime.fromisoformat(now) - datetime.fromisoformat(lesson['attendance_started_at'])).total_seconds()))
             # Legacy lessons without a deadline retain their recorded threshold.
             cutoff = datetime.fromisoformat(lesson['attendance_deadline']) if lesson['attendance_deadline'] else datetime.fromisoformat(lesson['attendance_started_at']) + timedelta(minutes=lesson['late_after'])
-            late = max(0, int((datetime.fromisoformat(now) - cutoff).total_seconds()))
-            is_late = datetime.fromisoformat(now) >= cutoff
-            db.execute('UPDATE attendance_entries SET seat_no=?,status=?,signed_at=?,late_seconds=?,source_ip=?,client_id=? WHERE lesson_id=? AND student_id=?', (seat, 'late' if is_late else 'present', now, late, source_ip, None if teacher else client_id, lid, sid))
+            arrival = r['first_signed_at'] or now
+            late = max(0, int((datetime.fromisoformat(arrival) - cutoff).total_seconds()))
+            is_late = datetime.fromisoformat(arrival) >= cutoff
+            db.execute('UPDATE attendance_entries SET seat_no=?,status=?,signed_at=?,late_seconds=?,source_ip=?,client_id=?,recheckin_allowed=0,first_signed_at=? WHERE lesson_id=? AND student_id=?', (seat, 'late' if is_late else 'present', now, late, source_ip, (r['client_id'] if r['seat_no']==seat else None) if teacher else client_id, arrival, lid, sid))
             db.execute('DELETE FROM attendance_leave WHERE student_id=?', (sid,))
             db.execute('UPDATE attendance_entries SET move_reason=? WHERE lesson_id=? AND student_id=?', (move_reason if seat != r['original_seat'] else '',lid,sid))
             db.execute("UPDATE seat_change_requests SET status='cancelled',decided_at=? WHERE lesson_id=? AND student_id=? AND status='pending'", (now,lid,sid))
-            if not teacher and move_reason == 'long_term' and seat != r['original_seat']:
-                db.execute('''INSERT INTO seat_change_requests VALUES (?,?,?,?,?,'pending',?,NULL)
-                    ON CONFLICT(lesson_id,student_id) DO UPDATE SET from_seat=excluded.from_seat,to_seat=excluded.to_seat,status='pending',created_at=excluded.created_at,decided_at=NULL''', (uuid4().hex,lid,sid,r['original_seat'],seat,now))
+            self.event(db,lid,sid,'teacher_checkin' if teacher else 'checkin',seat,source_ip,now)
+            if not teacher and move_reason in ('long_term','device_fault') and seat != r['original_seat']:
+                db.execute('''INSERT INTO seat_change_requests(id,lesson_id,student_id,from_seat,to_seat,status,created_at,decided_at,kind) VALUES (?,?,?,?,?,'pending',?,NULL,?)
+                    ON CONFLICT(lesson_id,student_id) DO UPDATE SET from_seat=excluded.from_seat,to_seat=excluded.to_seat,status='pending',created_at=excluded.created_at,decided_at=NULL,kind=excluded.kind''', (uuid4().hex,lid,sid,next((x['seat_no'] for x in data['registrations'] if x['student_id']==sid),r['original_seat']),seat,now,'long_term' if move_reason=='long_term' else 'temporary'))
         return {'accepted': True}
 
     def mark(self, lid, sid, status):
@@ -168,9 +172,11 @@ class AttendanceService:
             lesson = self.require_current(db, lid)
             if not lesson['attendance_started_at']:
                 raise AppError('请先发起签到', 409)
-            if not db.execute('SELECT 1 FROM attendance_entries WHERE lesson_id=? AND student_id=?', (lid, sid)).fetchone():
+            previous = db.execute('SELECT * FROM attendance_entries WHERE lesson_id=? AND student_id=?', (lid, sid)).fetchone()
+            if not previous:
                 raise AppError('学生不在本次名单中', 404)
-            db.execute('UPDATE attendance_entries SET status=?,seat_no=NULL,signed_at=NULL,late_seconds=0,source_ip=NULL,client_id=NULL WHERE lesson_id=? AND student_id=?', (status, lid, sid))
+            self.event(db,lid,sid,'mark_'+status,previous['seat_no'],previous['source_ip'],timestamp())
+            db.execute('UPDATE attendance_entries SET recheckin_allowed=?,status=?,seat_no=NULL,signed_at=NULL,late_seconds=0,source_ip=NULL,client_id=NULL WHERE lesson_id=? AND student_id=?', (int(status=='pending'), status, lid, sid))
             db.execute('DELETE FROM attendance_leave WHERE student_id=?', (sid,))
             db.execute("UPDATE seat_change_requests SET status='cancelled',decided_at=? WHERE lesson_id=? AND student_id=? AND status='pending'", (timestamp(),lid,sid))
             if status == 'long_leave':
@@ -189,18 +195,18 @@ class AttendanceService:
             signed = db.execute('SELECT seat_no FROM attendance_entries WHERE lesson_id=? AND student_id=?',(q['lesson_id'],q['student_id'])).fetchone()
             if not signed or signed['seat_no'] != q['to_seat']:
                 raise AppError('签到座位已变更，请核对',409)
-            if approve:
+            if approve and q['kind']=='long_term':
                 self.seating.approve_move(db,lesson['round_id'],q['student_id'],q['from_seat'],q['to_seat'])
             db.execute('UPDATE seat_change_requests SET status=?,decided_at=? WHERE id=?',('approved' if approve else 'rejected',timestamp(),request_id))
 
-    def history(self, class_id=None, day=None):
+    def history(self, class_id=None, day=None, grade=None):
         if day:
             try:
                 datetime.strptime(day, '%Y-%m-%d')
             except ValueError:
                 raise AppError('日期格式应为 YYYY-MM-DD')
         with self.database.connect() as db:
-            return [dict(r) for r in db.execute("SELECT * FROM lessons WHERE (? IS NULL OR class_id=?) AND (? IS NULL OR date(started_at,'localtime')=?) ORDER BY started_at DESC,rowid DESC", (class_id, class_id, day, day))]
+            return [dict(r) for r in db.execute("SELECT * FROM lessons WHERE (? IS NULL OR class_id=?) AND (? IS NULL OR date(started_at,'localtime')=?) AND (? IS NULL OR grade=?) ORDER BY started_at DESC,rowid DESC", (class_id, class_id, day, day, grade, grade))]
 
     def candidates(self, db, lid):
         lesson = self.require_current(db, lid)
@@ -210,5 +216,14 @@ class AttendanceService:
 
     def retire_classes(self, db, ids):
         for cid in ids:
-            db.execute("UPDATE attendance_entries SET status='absent' WHERE status='pending' AND lesson_id IN (SELECT id FROM lessons WHERE class_id=? AND ended_at IS NULL AND attendance_started_at IS NOT NULL)", (cid,))
+            db.execute("UPDATE attendance_entries SET status='absent',recheckin_allowed=0 WHERE status='pending' AND lesson_id IN (SELECT id FROM lessons WHERE class_id=? AND ended_at IS NULL AND attendance_started_at IS NOT NULL)", (cid,))
             db.execute('UPDATE lessons SET ended_at=COALESCE(ended_at,?),attendance_closed_at=CASE WHEN attendance_started_at IS NOT NULL THEN COALESCE(attendance_closed_at,?) END WHERE class_id=?', (timestamp(), timestamp(), cid))
+
+    @staticmethod
+    def event(db, lid, sid, action, seat, ip, now):
+        db.execute('INSERT INTO attendance_events VALUES (?,?,?,?,?,?,?)',(uuid4().hex,lid,sid,action,seat,ip,now))
+
+    def events(self, lid):
+        with self.database.connect() as db:
+            self.detail(lid,db)
+            return [dict(r) for r in db.execute('SELECT * FROM attendance_events WHERE lesson_id=? ORDER BY rowid',(lid,))]

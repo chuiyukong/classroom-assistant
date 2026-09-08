@@ -15,7 +15,12 @@ Copy-Item -LiteralPath (Join-Path $versionRoot 'ClassroomAssistant.exe') -Destin
 Copy-Item -LiteralPath 'README.md','CHANGELOG.md' -Destination $delivery
 $docsTarget = Join-Path $delivery 'docs'
 New-Item -ItemType Directory -Path $docsTarget -Force | Out-Null
-Copy-Item -LiteralPath 'docs' -Destination $delivery -Recurse -Force
+Get-ChildItem -LiteralPath (Join-Path $projectRoot 'docs') -Recurse -File | Where-Object { $_.Extension -in '.md','.html','.svg','.png' } | ForEach-Object {
+    $relativeDoc = $_.FullName.Substring((Join-Path $projectRoot 'docs').Length + 1)
+    $targetDoc = Join-Path $docsTarget $relativeDoc
+    New-Item -ItemType Directory -Path (Split-Path -Parent $targetDoc) -Force | Out-Null
+    Copy-Item -LiteralPath $_.FullName -Destination $targetDoc -Force
+}
 Compress-Archive -LiteralPath $delivery -DestinationPath (Join-Path $versionRoot ('ClassroomAssistant-v' + $releaseVersion + '-Win10-x64.zip')) -Force
 & $pythonExe scripts/build_source.py
 if ($LASTEXITCODE -ne 0) { throw 'Source archive failed.' }

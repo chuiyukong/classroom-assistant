@@ -69,13 +69,14 @@
       if (!teacher) { notice(data.round && data.round.is_open ? '新登记已开始，请重新核对座位并登记。' : '当前座位已更新，请以座位图为准。'); }
     }
     if(!teacher && (!data.round || !data.round.is_open)){window.location.replace('/attendance');return;}
-    text('active-class', teacher ? (classNames[data.active_class_id] || '尚未选择上课班级') : (data['class'] ? classLabel(data['class']) : '等待上课'));
+    text('active-class', data['class'] ? (teacher ? classLabel(data['class']) : data['class'].name) : '等待上课');
     state = data; buildMap(data.layout); text('capacity', data.layout.seats.length); text('count', data.count);
-    text('class-title', data['class'] ? classLabel(data['class']) : (teacher ? '请选择或新建班级' : '等待教师开启登记'));
+    text('class-title', data.is_current === false ? '历史存档' : '座位登记');
     var round = data.round;
     text('round-status', teacher && data.is_current === false && round ? '历史存档 · ' + new Date(round.opened_at).toLocaleString() : (round && round.is_open ? '座位登记开放中' : '座位登记未开放'));
     el('round-status').className='operation-status '+(round && round.is_open ? 'is-open':'is-closed');
     text('hint', teacher ? (data.is_current === false ? '存档只读，设备状态显示当前状态。可导出此份存档。' : '点击座位可编辑学生登记、学生备注及跨班级共用的设备配置。') : (data.my_seat ? '这台电脑已登记 ' + data.my_seat + ' 号座位。填写有误请联系教师。' : (round && round.is_open ? '请按电脑或桌面座位号核对实际位置，填写姓名。' : '座位登记未开放')));
+    if(!teacher && data.my_seat){var mine=data.registrations.filter(function(r){return r.seat_no===data.my_seat;})[0];el('hint').textContent='';var who=document.createElement('strong');who.textContent=mine?mine.name:'你';el('hint').appendChild(who);el('hint').appendChild(document.createTextNode('已登记 '+data.my_seat+' 号座位，填写有误请联系教师。'));}
     var available = 0, disabled = 0;
     data.layout.seats.forEach(function (s) {
       var btn = seatButtons[s.number], item = record(s.number), config = device(s.number);
@@ -238,7 +239,7 @@
     for(var y=new Date().getFullYear()+10;y>=new Date().getFullYear()-10;y--){option(el('class-year'),String(y),y+'年');} el('class-year').value=String(new Date().getFullYear());
     el('class-form').onsubmit = function (event) {
       event.preventDefault(); var name = el('class-name').value.trim();
-      api('POST', '/api/v1/teacher/classes', {name: name, year:Number(el('class-year').value), semester:el('class-semester').value}, function (err, data) {
+      api('POST', '/api/v1/teacher/classes', {name: name, year:Number(el('class-year').value), semester:el('class-semester').value,grade:el('class-grade').value}, function (err, data) {
         if (err) { notice(err, true); return; } el('class-name').value = ''; loadClasses(data.id); notice('班级已添加，请开始登记。');
       });
     };

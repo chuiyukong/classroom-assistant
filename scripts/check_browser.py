@@ -63,7 +63,7 @@ def run():
                 a.locator('#notice').filter(has_text='登记成功').wait_for()
                 duplicate_context = browser.new_context(extra_http_headers={'X-Test-Device-IP': '10.0.0.1'})
                 duplicate_page = duplicate_context.new_page(); duplicate_page.goto(origin + '/')
-                duplicate_page.locator('#hint').filter(has_text='这台电脑已登记 1').wait_for()
+                duplicate_page.locator('#hint').filter(has_text='林晓已登记 1').wait_for()
                 assert duplicate_page.locator('[data-seat="4"]').is_disabled()
                 b.locator('#submit-seat').click()
                 b.locator('#dialog-error').filter(has_text='该座位已登记').wait_for()

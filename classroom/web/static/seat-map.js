@@ -27,17 +27,16 @@
     entries.forEach(function(r){fixed[r.original_seat]=r;if(r.seat_no){actual[r.seat_no]=r;}});
     for(var number in this.buttons){if(Object.prototype.hasOwnProperty.call(this.buttons,number)){
       var n=Number(number),btn=this.buttons[n],r=actual[n]||fixed[n],signed=!!actual[n],moved=r&&r.seat_no&&r.seat_no!==n;
-      if(options.rollcall && moved){r=null;}
+      if(options.rollcall && moved){r=null;moved=false;}
       var state=signed?'present':(moved?'moved':(r?'pending':'empty')),off=disabled.indexOf(n)!==-1;
       var status=off?'设备停用':(signed?'已签到':(moved?'已换座':(r?'未签到':'')));
       if(r && r.status && !moved){status=labels[r.status];state=r.status;}
       if(options.rollcall && !options.attendance){status=off?'设备停用':'';state=r?'taken':'empty';}
-      if(options.rollcall && options.attendance && r && !signed){state='absent';status='未签到';}
-      btn.className='seat attendance-seat '+state+(off?' unavailable':'')+(this.highlighted===n?' draw-highlight':'');
+      btn.className='seat attendance-seat '+state+(off?' unavailable':'')+(this.highlighted===n?' draw-highlight':'')+(r && (options.selected||[]).indexOf(r.student_id)!==-1?' manual-selected':'');
       btn.querySelector('.name').textContent=r?r.name:'空位';btn.querySelector('.seat-status').textContent=status;
-      btn.disabled=!!options.blocked||!!options.rollcall||(!options.teacher && (off||signed));
+      btn.disabled=!!options.blocked||(!!options.rollcall && !options.manual)||(!options.teacher && (off||signed));
       btn.setAttribute('aria-label',n+'号 '+(r?r.name:'空位')+' '+status);
-      btn.title=n+'号 '+(r?r.name:'空位')+' '+status;
+      btn.title=n+'号 '+(r?r.name:'空位')+' '+status+(options.log && r ? '\n签到时间：'+(r.signed_at?new Date(r.signed_at).toLocaleString():'未签到')+'\n学生机 IP：'+(r.source_ip||'未获取（教师补签或未签到）') : '');
     }}
   };
   SeatMap.prototype.highlight=function(number){var old=this.buttons[this.highlighted];if(old){old.className=old.className.replace(' draw-highlight','');}this.highlighted=number;var next=this.buttons[number];if(next){next.className+=' draw-highlight';}};

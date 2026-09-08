@@ -119,6 +119,28 @@ ALTER TABLE classes_new RENAME TO classes;
 """))
 
 
+MIGRATIONS.append((6, """
+ALTER TABLE classes ADD COLUMN grade TEXT NOT NULL DEFAULT '';
+ALTER TABLE lessons ADD COLUMN grade TEXT NOT NULL DEFAULT '';
+ALTER TABLE lessons ADD COLUMN year INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE lessons ADD COLUMN semester TEXT NOT NULL DEFAULT '';
+UPDATE lessons SET grade=COALESCE((SELECT grade FROM classes WHERE classes.id=lessons.class_id),''),
+ year=COALESCE((SELECT year FROM classes WHERE classes.id=lessons.class_id),0),
+ semester=COALESCE((SELECT semester FROM classes WHERE classes.id=lessons.class_id),'');
+ALTER TABLE attendance_entries ADD COLUMN first_signed_at TEXT;
+UPDATE attendance_entries SET first_signed_at=signed_at;
+ALTER TABLE attendance_entries ADD COLUMN recheckin_allowed INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE seat_change_requests ADD COLUMN kind TEXT NOT NULL DEFAULT 'long_term';
+CREATE TABLE attendance_events (
+ id TEXT PRIMARY KEY, lesson_id TEXT NOT NULL REFERENCES lessons(id), student_id TEXT NOT NULL,
+ action TEXT NOT NULL, seat_no INTEGER, source_ip TEXT, created_at TEXT NOT NULL
+);
+CREATE TABLE rollcall_selections (
+ class_id TEXT PRIMARY KEY REFERENCES classes(id), student_ids TEXT NOT NULL, updated_at TEXT NOT NULL
+);
+"""))
+
+
 class Database:
     def __init__(self, path):
         self.path = Path(path)

@@ -1,3 +1,4 @@
+import json
 import secrets
 from threading import Lock
 from uuid import uuid4
@@ -12,10 +13,10 @@ class RollCallService:
         self._last_context = None
         self._last_student = None
 
-    def current(self, connection=None):
+    def current(self, connection=None, scope="all"):
         if connection is None:
             with self.database.connect() as db:
-                return self.current(db)
+                return self.current(db,scope)
         arrangement = self.attendance.seating.get_current_arrangement(connection)
         lesson = self.attendance.current(connection, arrangement)
         data = self.attendance.detail(lesson['id'], connection) if lesson else {}
@@ -31,13 +32,24 @@ class RollCallService:
             context = 'seating:' + (arrangement['round']['id'] if arrangement['round'] else '')
             data['layout'] = arrangement['layout']
             data['disabled_seats'] = [r['seat_no'] for r in arrangement['seat_configs'] if r['disabled']]
-        return dict(layout=data['layout'],disabled_seats=data['disabled_seats'],entries=entries,
+        cid = arrangement['class']['id'] if arrangement['class'] else None
+        saved = connection.execute('SELECT student_ids FROM rollcall_selections WHERE class_id=?',(cid,)).fetchone()
+        roster = {r['student_id'] for r in entries}
+        selected = [sid for sid in json.loads(saved[0]) if sid in roster] if saved else []
+        if scope not in ('all','late','manual'):
+            raise AppError('点名范围无效')
+        if scope=='late':
+            late_ids={r['student_id'] for r in entries if r.get('status')=='late'}
+            candidates=[r for r in candidates if r['student_id'] in late_ids]
+        elif scope=='manual':
+            candidates=[r for r in candidates if r['student_id'] in selected]
+        return dict(class_id=cid,scope=scope,selected_ids=selected,layout=data['layout'],disabled_seats=data['disabled_seats'],entries=entries,
                     source=source,context_id=context,candidates=candidates,candidate_count=len(candidates))
 
-    def draw_current(self, expected_context):
+    def draw_current(self, expected_context, scope="all"):
         # UI draws are transient. A single previous identity prevents immediate repeats.
         with self._lock:
-            data = self.current()
+            data = self.current(scope=scope)
             if expected_context != data['context_id']:
                 raise AppError('点名名单已切换，请重试',409)
             candidates = data['candidates']
@@ -47,6 +59,20 @@ class RollCallService:
             chosen = secrets.choice(pool)
             self._last_context, self._last_student = expected_context, chosen['student_id']
             return dict(chosen,source=data['source'],context_id=expected_context,candidate_count=len(candidates))
+
+    def save_selection(self, expected_context, student_ids):
+        if not isinstance(student_ids,list) or len(student_ids)>64 or any(not isinstance(s,str) for s in student_ids):
+            raise AppError('请选择学生范围')
+        with self.database.connect(write=True) as db:
+            data=self.current(db)
+            if data['context_id']!=expected_context or not data['class_id']:
+                raise AppError('班级或名单已切换，请重新选择',409)
+            roster={r['student_id'] for r in data['entries']}
+            if any(s not in roster for s in student_ids):
+                raise AppError('范围包含当前名单之外的学生',409)
+            db.execute('INSERT INTO rollcall_selections VALUES (?,?,?) ON CONFLICT(class_id) DO UPDATE SET student_ids=excluded.student_ids,updated_at=excluded.updated_at',
+                       (data['class_id'],json.dumps(list(dict.fromkeys(student_ids))),timestamp()))
+        return self.current(scope='manual')
 
     def draw(self, lid):
         with self.database.connect(write=True) as db:

@@ -78,6 +78,8 @@ def run():
                                              data=None if payload is None else json.dumps(payload).encode())
                 with urllib.request.urlopen(req, timeout=5) as response:
                     return response.read() if raw else json.load(response)
+            assert request('/static/app.css',raw=True)==(ROOT/'classroom/web/static/app.css').read_bytes()
+            assert request('/static/logs.js',raw=True)==(ROOT/'classroom/web/static/logs.js').read_bytes()
             assert b'class-select' in request('/teacher', raw=True)
             cls = request('/api/v1/teacher/classes', 'POST', {'name': '打包测试班', 'year':2026, 'semester':'上学期'})
             assert cls['year']==2026 and cls['semester']=='上学期'
@@ -85,9 +87,11 @@ def run():
             assert other['id']!=cls['id']
             current = request('/api/v1/teacher/classes/' + cls['id'] + '/rounds', 'POST', {})
             request('/api/v1/teacher/rounds/' + current['round']['id'] + '/seats/1', 'PUT', {'name': '测试同学'})
+            for number in range(2,51):
+                request('/api/v1/teacher/rounds/'+current['round']['id']+'/seats/'+str(number),'PUT',{'name':'测试生%02d'%number})
             workbook = load_workbook(BytesIO(request('/api/v1/teacher/classes/' + cls['id'] + '/export', raw=True)))
             assert workbook['Sheet1']['D15'].value == '测试同学'
-            assert workbook['Sheet1']['E18'].value == 1
+            assert workbook['Sheet1']['E18'].value == 50
             config_url = '/api/v1/teacher/layouts/classroom-64-v2/seats/2/config'
             request(config_url, 'PUT', {'disabled': True, 'note': '设备备注'})
             state = request('/api/v1/student/state')
@@ -97,8 +101,8 @@ def run():
             assert b'modules.js' in request('/teacher/attendance', raw=True)
             request('/api/v1/teacher/rounds/' + current['round']['id'] + '/close', 'POST', {})
             independent=request('/api/v1/teacher/rollcall/current')
-            assert independent['source']=='seating' and independent['candidate_count']==1
-            assert request('/api/v1/teacher/rollcall/current','POST',{'context_id':independent['context_id']})['name']=='测试同学'
+            assert independent['source']=='seating' and independent['candidate_count']==50
+            assert request('/api/v1/teacher/rollcall/current','POST',{'context_id':independent['context_id']})['name'] in ['测试同学']+['测试生%02d'%n for n in range(2,51)]
             assert request('/api/v1/teacher/lessons/current')['lesson'] is None
             assert '智慧课堂综合平台'.encode() in request('/attendance',raw=True)
             lesson = request('/api/v1/teacher/lessons', 'POST', {'round_id': current['round']['id']})
@@ -109,6 +113,10 @@ def run():
             request('/api/v1/teacher/lessons/' + lid + '/students/' + lesson['entries'][0]['student_id'], 'PUT', {'status': 'present', 'seat_no':64})
             assert request('/api/v1/teacher/lessons/' + lid)['counts']['actual'] == 1
             assert request('/api/v1/teacher/lessons/' + lid + '/export', raw=True).startswith(b'\xef\xbb\xbf')
+            assert b'logs.js' in request('/teacher/data',raw=True)
+            assert request('/api/v1/teacher/lessons/'+lid+'/events')['events']
+            request('/api/v1/teacher/rollcall/selection','PUT',{'context_id':'attendance:'+lid,'student_ids':[lesson['entries'][0]['student_id']]})
+            assert request('/api/v1/teacher/rollcall/current?scope=manual')['candidate_count']==1
             print('Packaged executable passed: isolated startup, bundled assets/templates, local authentication, class/round creation, seat correction, Excel export.')
         finally:
             # PyInstaller onefile creates a child; stop only this owned process tree.

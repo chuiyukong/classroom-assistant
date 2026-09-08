@@ -180,7 +180,7 @@ def create_app(data_dir=None, bootstrap_key=None):
     @app.post("/api/v1/teacher/classes")
     def new_class():
         data = body()
-        return jsonify(classes.create(data.get("name"), data.get("year", 0), data.get("semester", ""))), 201
+        return jsonify(classes.create(data.get("name"), data.get("year", 0), data.get("semester", ""), data.get("grade", ""))), 201
 
     @app.get("/api/v1/teacher/classes/<class_id>/rounds")
     def list_rounds(class_id):
@@ -251,7 +251,7 @@ def create_app(data_dir=None, bootstrap_key=None):
 
     @app.get('/api/v1/teacher/lessons')
     def lesson_history():
-        return jsonify(lessons=attendance.history(request.args.get('class_id'), request.args.get('day')))
+        return jsonify(lessons=attendance.history(request.args.get('class_id'), request.args.get('day'),request.args.get('grade')))
 
     @app.get('/api/v1/teacher/lessons/<lid>')
     def lesson_detail(lid):
@@ -287,11 +287,26 @@ def create_app(data_dir=None, bootstrap_key=None):
 
     @app.get('/api/v1/teacher/rollcall/current')
     def current_draw_state():
-        return jsonify(rollcall.current())
+        return jsonify(rollcall.current(scope=request.args.get('scope','all')))
 
     @app.post('/api/v1/teacher/rollcall/current')
     def current_draw():
-        return jsonify(rollcall.draw_current(body().get('context_id')))
+        data=body()
+        return jsonify(rollcall.draw_current(data.get('context_id'),data.get('scope','all')))
+
+    @app.put('/api/v1/teacher/rollcall/selection')
+    def save_draw_selection():
+        data=body()
+        return jsonify(rollcall.save_selection(data.get('context_id'),data.get('student_ids')))
+
+    @app.put('/api/v1/teacher/classes/<cid>/grade')
+    def class_grade(cid):
+        classes.set_grade(cid,body().get('grade'))
+        return jsonify(ok=True)
+
+    @app.get('/api/v1/teacher/lessons/<lid>/events')
+    def attendance_events(lid):
+        return jsonify(events=attendance.events(lid))
 
     @app.post('/api/v1/teacher/rollcall/<lid>')
     def draw(lid):
@@ -307,12 +322,12 @@ def create_app(data_dir=None, bootstrap_key=None):
         data = attendance.detail(lid)
         stream = StringIO(newline='')
         writer = csv.writer(stream)
-        writer.writerow(['班级','上课时间','签到开始','学生编号','姓名','原座位','签到座位','考勤状态','签到时间','迟到秒数'])
+        writer.writerow(['班级','上课时间','签到开始','学生编号','姓名','原座位','签到座位','考勤状态','签到时间','迟到秒数','下课时间','学生机IP','年级','年份','学期'])
         def safe(value):
             value = str(value or '')
             return "'" + value if value.lstrip().startswith(('=', '+', '-', '@')) else value
         for r in data['entries']:
-            writer.writerow([safe(data['lesson']['class_name']), data['lesson']['started_at'], data['lesson']['attendance_started_at'], r['student_id'], safe(r['name']), r['original_seat'], r['seat_no'], STATUSES[r['status']] if data['lesson']['attendance_started_at'] else '未开展考勤', r['signed_at'], r['late_seconds']])
+            writer.writerow([safe(data['lesson']['class_name']), data['lesson']['started_at'], data['lesson']['attendance_started_at'], r['student_id'], safe(r['name']), r['original_seat'], r['seat_no'], STATUSES[r['status']] if data['lesson']['attendance_started_at'] else '未开展考勤', r['signed_at'], r['late_seconds'],data['lesson']['ended_at'],r['source_ip'],safe(data['lesson']['grade']),data['lesson']['year'],safe(data['lesson']['semester'])])
         return send_file(BytesIO(stream.getvalue().encode('utf-8-sig')), as_attachment=True, download_name='考勤日志_' + lid[:8] + '.csv', mimetype='text/csv; charset=utf-8')
 
     return app

@@ -1,0 +1,21 @@
+<section class="teacher-panel padded" id="lesson-logs">
+  <h2>课堂日志</h2>
+  <div class="log-tabs"><button id="attendance-log-tab" class="secondary current">考勤日志查询</button><button id="teaching-log-tab" class="secondary">教学日志查询</button></div>
+  <div class="log-filters">
+    <label>年级<select id="log-grade"><option value="">全部年级</option></select></label>
+    <label>年份<select id="log-year"><option value="">全部年份</option></select></label>
+    <label>学期<select id="log-semester"><option value="">全部学期</option><option>上学期</option><option>下学期</option></select></label>
+    <label class="log-class-field">班级<select id="log-class"><option value="">全部班级</option></select></label>
+    <label>上课日期<input id="log-day" type="date"></label>
+  </div>
+  <button id="log-search" class="primary">查询课堂</button>
+  <label>选择一节课<select id="log-lesson"><option value="">请先查询课堂</option></select></label>
+  <p id="log-message" role="status"></p>
+  <div id="log-view" hidden>
+    <h3 id="log-title"></h3><p id="log-times"></p><p id="log-counts"></p>
+    <a id="log-export" class="secondary">导出考勤日志 CSV</a>
+    <p id="log-help">鼠标指向座位查看签到时间；点击座位查看签到与设备记录。</p>
+    <div class="room-scroll"><div id="log-map"></div><div class="podium">讲台</div></div>
+    <div id="log-student-detail" class="log-student-detail" role="status"></div>
+  </div>
+</section>

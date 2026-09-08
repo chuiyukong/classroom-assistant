@@ -4,9 +4,9 @@
   var teacher = document.body.getAttribute('data-teacher') === 'yes';
   var module = document.body.getAttribute('data-module'), state = null, arrangement = null;
   var historyId = '', correctionId = '', correctionLesson = '', recycled = false, drawing = false, busy = false;
-  var moduleConnected = false;
+  var moduleConnected = false, drawScope='all', correctionEmptySeat=null, rangeRevision=0;
   var polling = false, selectedSeat = null, checkinLesson = null, serverOffset = 0, lastRequests = '';
-  var seatMap = el('attendance-map') ? new window.ClassroomSeatMap(el('attendance-map'), function(n){ if(!teacher){showCheckin(n);}else if(module==='attendance'){showCorrection(n);} }) : null;
+  var seatMap = el('attendance-map') ? new window.ClassroomSeatMap(el('attendance-map'), function(n){ if(!teacher){showCheckin(n);}else if(module==='attendance'){showCorrection(n);}else if(module==='rollcall'){toggleDrawStudent(n);} }) : null;
   var labels = {pending:'未签到', present:'已到', late:'迟到', leave:'请假', absent:'缺勤', long_leave:'长期请假'};
   function el(id) { return document.getElementById(id); }
   function put(id, s) { if (el(id)) { el(id).textContent = s; } }
@@ -29,17 +29,25 @@
   function map(entries) {
     if (!seatMap || !state) { return; }
     seatMap.layout(state.layout);
-    seatMap.update(entries, {disabled:state.disabled_seats || [], teacher:teacher, rollcall:module==='rollcall', attendance:state.source==='attendance' || !!(state.lesson && state.lesson.attendance_started_at), blocked:teacher ? !(state.is_current && state.lesson && state.lesson.attendance_started_at) : !canCheckin()});
+    seatMap.update(entries, {disabled:state.disabled_seats || [], teacher:teacher, rollcall:module==='rollcall', attendance:state.source==='attendance' || !!(state.lesson && state.lesson.attendance_started_at), manual:module==='rollcall' && drawScope==='manual' && !drawing,selected:drawScope==='manual'?state.selected_ids:[],blocked:teacher ? (module==='rollcall' ? (!moduleConnected || drawing) : !(state.is_current && state.lesson && state.lesson.attendance_started_at)) : !canCheckin()});
+  }
+  function toggleDrawStudent(n){
+    if(drawScope!=='manual' || drawing || busy || !state){return;}
+    var rows=state.entries.filter(function(r){return (state.source==='attendance'?r.seat_no:r.original_seat)===n;});
+    if(!rows.length){return;}var selected=(state.selected_ids||[]).slice(),id=rows[0].student_id,index=selected.indexOf(id);
+    if(index===-1){selected.push(id);}else{selected.splice(index,1);}
+    rangeRevision++;save('teacher/rollcall/selection',{context_id:state.context_id,student_ids:selected},'PUT',function(d){if(state && state.context_id===d.context_id){render(d);}});
   }
   function canCheckin() {
     var l=state && state.lesson;
-    return !!(moduleConnected && l && l.attendance_started_at && !l.attendance_closed_at && !state.my_student_id);
+    return !!(moduleConnected && l && l.attendance_started_at && (!l.attendance_closed_at || state.recheckin_available) && !state.my_student_id);
   }
   function countdown() {
     if(!el('countdown')) { return; }
     var l=state && state.lesson;
     if(!l || !l.attendance_started_at){put('countdown','签到未开放');el('countdown').className='operation-status is-closed';return;}
     if(!teacher && state.my_student_id){put('countdown','已签到');el('countdown').className='operation-status is-open';return;}
+    if(!teacher && l.attendance_closed_at && state.recheckin_available){put('countdown','指定学生可重新签到');el('countdown').className='operation-status is-open';return;}
     var seconds=l.attendance_deadline ? Math.ceil((new Date(l.attendance_deadline).getTime()-Date.now()-serverOffset)/1000) : null;
     var late=seconds!==null && seconds<=0, span=Math.abs(seconds||0);
     var clock=('0'+Math.floor(span/60)).slice(-2)+':'+('0'+span%60).slice(-2);
@@ -66,12 +74,12 @@
     var r=actual[0]||fixed[0]||state.entries[0];if(!r){return;}
     var select=el('correction-student');select.textContent='';
     state.entries.forEach(function(item){var o=make('option',item.name+' · '+item.original_seat+'号');o.value=item.student_id;select.appendChild(o);});
-    select.value=r.student_id;loadCorrection();el('correction-seat').value=number;
+    correctionEmptySeat=actual.length||fixed.length?null:number;select.value=r.student_id;loadCorrection();
     put('correction-error','');put('correction-name',number+'号 · 考勤纠正');el('correction-panel').hidden=false;select.focus();
   }
   function loadCorrection(){
     var r=state.entries.filter(function(item){return item.student_id===el('correction-student').value;})[0];if(!r){return;}
-    correctionId=r.student_id;el('correction-status').value=r.status==='late'?'present':r.status;el('correction-seat').value=r.seat_no||r.original_seat;
+    correctionId=r.student_id;el('correction-status').value=r.status==='late'?'present':r.status;el('correction-seat').value=correctionEmptySeat||r.seat_no||r.original_seat;
     put('correction-detail',labels[r.status]+(r.late_seconds?' · 迟到 '+r.late_seconds+' 秒':''));
   }
   function render(d) {
@@ -97,26 +105,27 @@
         [['expected','应到'],['actual','实到'],['pending','未签到'],['leave','请假'],['long_leave','长期请假'],['absent','缺勤'],['late','迟到']].forEach(function (pair) { var n = make('div', '', 'summary-card'); n.appendChild(make('strong', String(d.counts[pair[0]]))); n.appendChild(make('span', pair[1])); summary.appendChild(n); });
       }
       put('missing-names', l && l.attendance_started_at ? '尚未到场：' + (d.entries.filter(function (r) { return r.status !== 'present' && r.status !== 'late'; }).map(function (r) { return r.name + '（' + labels[r.status] + '）'; }).join('、') || '全部到齐') : '尚未开展考勤');
-      el('attendance-export').hidden = !l; if (l) { el('attendance-export').href = '/api/v1/teacher/lessons/' + l.id + '/export'; }
       map(d.entries || []);
       var signature=JSON.stringify(d.change_requests||[])+live;
       if(signature!==lastRequests){lastRequests=signature;el('change-requests').textContent='';
-        (d.change_requests||[]).forEach(function(q){var row=make('div','','change-request');row.appendChild(make('span',q.name+' · '+q.from_seat+' → '+q.to_seat+' · '+({pending:'待审批',approved:'已同意',rejected:'已拒绝',cancelled:'已取消'}[q.status])));
-          if(q.status==='pending' && live){[true,false].forEach(function(yes){var b=make('button',yes?'同意长期换座':'拒绝','secondary');b.onclick=function(){if(yes && !confirm('同意 '+q.name+' 长期换至 '+q.to_seat+' 号？将修改当前座位，历史不变。')){return;}save('teacher/seat-changes/'+q.id,{approve:yes});};row.appendChild(b);});}el('change-requests').appendChild(row);});
+        (d.change_requests||[]).forEach(function(q){var row=make('div','','change-request');row.appendChild(make('span',q.name+' '+(q.kind==='temporary'?'临时换座':'长期换座')+' · '+q.from_seat+' → '+q.to_seat+' · '+({pending:'待审批',approved:'已同意',rejected:'已拒绝',cancelled:'已取消'}[q.status])));
+          if(q.status==='pending' && live){[true,false].forEach(function(yes){var b=make('button',yes?'同意':'拒绝','secondary');b.onclick=function(){if(yes && q.kind!=='temporary' && !confirm('同意 '+q.name+' 长期换至 '+q.to_seat+' 号？将修改当前座位，历史不变。')){return;}save('teacher/seat-changes/'+q.id,{approve:yes});};row.appendChild(b);});}el('change-requests').appendChild(row);});
         if(!(d.change_requests||[]).length){put('change-requests','暂无申请');}}
     } else {
       el('checkin-button').disabled=!canCheckin() || busy;
-      put('checkin-status',d.my_student_id ? '签到成功' : (canCheckin() ? '点击座位，输入姓名签到' : '签到未开放'));
+      var own=(d.entries||[]).filter(function(r){return r.student_id===d.my_student_id;})[0];
+      put('checkin-instruction',own?'姓名'+own.name+'已在'+own.seat_no+'号座位签到。':'请按登记的座位就坐和签到，若设备异常请在空座位就坐签到。');
+      put('checkin-status',d.my_student_id ? '' : (canCheckin() ? '点击座位，输入姓名签到' : '签到未开放'));
       map(d.entries||[]); countdown();
     }
   }
   function refresh() {
     if (module === 'data' || polling) { return; }
     polling = true;
-    var requested = historyId;
-    api('GET', teacher ? (module==='rollcall' ? 'teacher/rollcall/current' : historyId ? 'teacher/lessons/' + historyId : 'teacher/lessons/current') : 'student/attendance', null, function (err, d) {
+    var requested = historyId, requestedRange=rangeRevision, requestedScope=drawScope;
+    api('GET', teacher ? (module==='rollcall' ? 'teacher/rollcall/current?scope='+encodeURIComponent(drawScope) : historyId ? 'teacher/lessons/' + historyId : 'teacher/lessons/current') : 'student/attendance', null, function (err, d) {
       polling = false; moduleConnected=!err;
-      if (requested !== historyId) { return; }
+      if (requested !== historyId || requestedRange!==rangeRevision || requestedScope!==drawScope) { return; }
       put('module-connection', err ? '状态：连接中断' : '状态：已连接');
       el('module-connection').className='connection'+(err?' offline':'');
       if (!err) { render(d); } else {
@@ -132,7 +141,7 @@
   }
   if (module === 'data') {
     var classData=[];
-    function renderClasses(){el('class-list').textContent='';classData.filter(function(c){return (!el('filter-year').value || String(c.year)===el('filter-year').value) && (!el('filter-semester').value || (c.semester||'unset')===el('filter-semester').value);}).forEach(function(c){var label=make('label','','class-choice'),check=document.createElement('input');check.type='checkbox';check.value=c.id;label.appendChild(check);label.appendChild(make('span',c.name+' · '+(c.year?c.year+'年 '+c.semester:'未设置学期')));el('class-list').appendChild(label);});}
+    function renderClasses(){el('class-list').textContent='';classData.filter(function(c){return (!el('filter-year').value || String(c.year)===el('filter-year').value) && (!el('filter-semester').value || (c.semester||'unset')===el('filter-semester').value);}).forEach(function(c){var label=make('label','','class-choice'),check=document.createElement('input');check.type='checkbox';check.value=c.id;label.appendChild(check);label.appendChild(make('span',c.name+' · '+(c.year?c.year+'年 '+c.semester:'未设置学期')));var grade=make('input','','grade-edit');grade.value=c.grade||'';grade.placeholder='年级';grade.maxLength=20;grade.setAttribute('aria-label',c.name+'年级');label.appendChild(grade);var update=make('button','保存年级','secondary');update.type='button';update.onclick=function(e){e.preventDefault();save('teacher/classes/'+c.id+'/grade',{grade:grade.value},'PUT',function(){classes();var event=document.createEvent('Event');event.initEvent('classes-updated',true,true);window.dispatchEvent(event);});};label.appendChild(update);el('class-list').appendChild(label);});}
     el('filter-year').onchange=renderClasses;el('filter-semester').onchange=renderClasses;
     function classes() {
       api('GET', 'teacher/classes' + (recycled ? '?deleted=1' : ''), null, function (err, d) {
@@ -142,8 +151,8 @@
       });
     }
     el('show-live').onclick = function () { recycled = false; classes(); }; el('show-deleted').onclick = function () { recycled = true; classes(); };
-    el('select-all').onclick = function () { var checks = el('class-list').querySelectorAll('input'); var all = Array.prototype.every.call(checks, function (c) { return c.checked; }); Array.prototype.forEach.call(checks, function (c) { c.checked = !all; }); };
-    el('manage-selected').onclick = function () { var ids = [], names = []; Array.prototype.forEach.call(el('class-list').querySelectorAll('input:checked'), function (c) { ids.push(c.value); names.push(c.parentNode.textContent); }); if (!ids.length) { message('请先选择班级'); return; } if (!confirm((recycled ? '恢复' : '移入回收站并结束相关登记和课堂') + '：\n' + names.join('\n'))) { return; } save('teacher/classes/manage', {ids:ids, action: recycled ? 'restore' : 'delete'}, 'POST', function () { classes(); context(); }); };
+    el('select-all').onclick = function () { var checks = el('class-list').querySelectorAll('input[type=checkbox]'); var all = Array.prototype.every.call(checks, function (c) { return c.checked; }); Array.prototype.forEach.call(checks, function (c) { c.checked = !all; }); };
+    el('manage-selected').onclick = function () { var ids = [], names = []; Array.prototype.forEach.call(el('class-list').querySelectorAll('input[type=checkbox]:checked'), function (c) { ids.push(c.value); names.push(c.parentNode.textContent); }); if (!ids.length) { message('请先选择班级'); return; } if (!confirm((recycled ? '恢复' : '移入回收站并结束相关登记和课堂') + '：\n' + names.join('\n'))) { return; } save('teacher/classes/manage', {ids:ids, action: recycled ? 'restore' : 'delete'}, 'POST', function () { classes(); context(); }); };
     classes(); context(); return;
   }
   if (teacher) {
@@ -159,21 +168,16 @@
       el('correction-student').onchange=loadCorrection;
       document.addEventListener('keydown',function(e){if(el('correction-panel').hidden){return;}if(e.keyCode===27){el('correction-panel').hidden=true;}if(e.keyCode===9){var nodes=Array.prototype.filter.call(el('correction-panel').querySelectorAll('select,input,button'),function(n){return !n.disabled && n.offsetParent!==null;});var index=nodes.indexOf(document.activeElement);e.preventDefault();nodes[(index+(e.shiftKey?-1:1)+nodes.length)%nodes.length].focus();}});
       el('correction-form').onsubmit = function (e) { e.preventDefault(); if (!correctionId) { return; } save('teacher/lessons/' + correctionLesson + '/students/' + correctionId, {status:el('correction-status').value, seat_no:Number(el('correction-seat').value)}, 'PUT', function () { el('correction-panel').hidden = true; }); };
-      api('GET','teacher/classes',null,function(err,d){ if (!err) { d.classes.forEach(function(c){var o=make('option',c.name);o.value=c.id;el('history-class').appendChild(o);}); } });
-      el('history-search').onclick = function () {
-        var query = [], cid = el('history-class').value, day = el('history-day').value;
-        if (cid) { query.push('class_id=' + encodeURIComponent(cid)); } if (day) { query.push('day=' + encodeURIComponent(day)); }
-        api('GET','teacher/lessons?' + query.join('&'),null,function(err,d){ if(err){message(err);return;} el('history-results').textContent=''; d.lessons.forEach(function(l){var b=make('button',l.class_name+' · '+time(l.started_at)+(l.ended_at?' · 已结束':' · 课堂记录'),'secondary history-item');b.onclick=function(){historyId=l.id;refresh();};el('history-results').appendChild(b);}); if(!d.lessons.length){put('history-results','没有符合条件的日志');} });
-      };
-      el('history-current').onclick = function () { historyId = ''; refresh(); };
+      el('missing-toggle').onclick=function(){el('missing-names').hidden=!el('missing-names').hidden;put('missing-toggle',el('missing-names').hidden?'查询尚未到场':'收起尚未到场');};
     } else {
+      el('draw-scope').onchange=function(){if(drawing){this.value=drawScope;return;}drawScope=this.value;refresh();};
       el('draw-button').onclick = function () {
         if(drawing || !state || !state.candidate_count){return;} drawing=true;el('draw-button').disabled=true;
         var contextId=state.context_id, entries=state.candidates;
         var reduced=window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
         function flash(){if(!entries.length){return;}var r=entries[Math.floor(Math.random()*entries.length)];seatMap.highlight(r.seat_no);put('draw-name',r.name);}
         var animation=reduced?null:setInterval(flash,110);
-        api('POST','teacher/rollcall/current',{context_id:contextId},function(err,d){setTimeout(function(){clearInterval(animation);drawing=false;
+        api('POST','teacher/rollcall/current',{context_id:contextId,scope:drawScope},function(err,d){setTimeout(function(){clearInterval(animation);drawing=false;
           if(state.context_id!==contextId){seatMap.highlight(null);put('draw-name','名单已切换');refresh();return;}
           if(err){message(err);put('draw-name','未抽取');seatMap.highlight(null);}else{put('draw-name',d.name);seatMap.highlight(d.seat_no);}refresh();},reduced?0:900);});
       };
@@ -185,7 +189,7 @@
       var radio=document.querySelector('input[name="move-reason"]:checked');var reason=el('move-reasons').hidden?'':(radio?radio.value:'');
       if(!el('move-reasons').hidden && !reason){put('checkin-error','请选择换座原因');return;}
       busy=true;el('checkin-button').disabled=true;
-      api('POST','student/attendance',{lesson_id:checkinLesson,name:el('checkin-name').value,seat_no:selectedSeat,move_reason:reason},function(err){busy=false;if(err){put('checkin-error',err);}else{closeCheckin();message(reason==='long_term'?'签到成功，长期换座申请已提交':'签到成功');}refresh();});
+      api('POST','student/attendance',{lesson_id:checkinLesson,name:el('checkin-name').value,seat_no:selectedSeat,move_reason:reason},function(err){busy=false;if(err){put('checkin-error',err);}else{closeCheckin();message(reason?'签到成功，换座申请已提交':'签到成功');}refresh();});
     };
   }
   context(); refresh(); setInterval(refresh, 1000); setInterval(context, 3000); setInterval(countdown,250);
