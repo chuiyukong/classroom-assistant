@@ -13,19 +13,6 @@ class AttendanceService:
     def __init__(self, database, seating):
         self.database, self.seating = database, seating
 
-    def expire_due(self):
-        now = timestamp()
-        with self.database.connect() as db:
-            due = db.execute('SELECT 1 FROM lessons WHERE attendance_deadline<=? AND attendance_closed_at IS NULL', (now,)).fetchone()
-        if due:
-            with self.database.connect(write=True) as db:
-                self._expire(db)
-
-    def _expire(self, db):
-        now = timestamp()
-        db.execute("UPDATE attendance_entries SET status='absent' WHERE status='pending' AND lesson_id IN (SELECT id FROM lessons WHERE attendance_deadline<=? AND attendance_closed_at IS NULL)", (now,))
-        db.execute('UPDATE lessons SET attendance_closed_at=attendance_deadline WHERE attendance_deadline<=? AND attendance_closed_at IS NULL', (now,))
-
     def current(self, db, arrangement=None):
         data = arrangement if arrangement is not None else self.seating.get_current_arrangement(db)
         row = db.execute('SELECT * FROM lessons WHERE ended_at IS NULL').fetchone()
@@ -85,7 +72,6 @@ class AttendanceService:
 
     def detail(self, lid, connection=None):
         if connection is None:
-            self.expire_due()
             with self.database.connect() as db:
                 return self.detail(lid, db)
         db = connection
@@ -103,7 +89,6 @@ class AttendanceService:
                 'layout': layout, 'disabled_seats': [n for n,c in configs.items() if c['disabled']], 'change_requests': requests, 'server_time': timestamp()}
 
     def state(self, student=False, ip=None, client_id=None):
-        self.expire_due()
         with self.database.connect() as db:
             lesson = self.current(db)
             if not lesson:
@@ -127,7 +112,6 @@ class AttendanceService:
         if (not isinstance(sid, str) and not isinstance(name, str)) or type(seat) is not int:
             raise AppError('请选择名单中的姓名和实际座位')
         with self.database.connect(write=True) as db:
-            self._expire(db)
             lesson = self.require_current(db, lid)
             if not lesson['attendance_started_at'] or (lesson['attendance_closed_at'] and not teacher):
                 raise AppError('签到尚未开始或已经结束', 409)
@@ -164,8 +148,11 @@ class AttendanceService:
                 raise AppError('该座位已有同学签到，请选择实际空位', 409)
             now = timestamp()
             elapsed = max(0, int((datetime.fromisoformat(now) - datetime.fromisoformat(lesson['attendance_started_at'])).total_seconds()))
-            late = max(0, elapsed - lesson['late_after'] * 60)
-            db.execute('UPDATE attendance_entries SET seat_no=?,status=?,signed_at=?,late_seconds=?,source_ip=?,client_id=? WHERE lesson_id=? AND student_id=?', (seat, 'late' if late else 'present', now, late, source_ip, None if teacher else client_id, lid, sid))
+            # Legacy lessons without a deadline retain their recorded threshold.
+            cutoff = datetime.fromisoformat(lesson['attendance_deadline']) if lesson['attendance_deadline'] else datetime.fromisoformat(lesson['attendance_started_at']) + timedelta(minutes=lesson['late_after'])
+            late = max(0, int((datetime.fromisoformat(now) - cutoff).total_seconds()))
+            is_late = datetime.fromisoformat(now) >= cutoff
+            db.execute('UPDATE attendance_entries SET seat_no=?,status=?,signed_at=?,late_seconds=?,source_ip=?,client_id=? WHERE lesson_id=? AND student_id=?', (seat, 'late' if is_late else 'present', now, late, source_ip, None if teacher else client_id, lid, sid))
             db.execute('DELETE FROM attendance_leave WHERE student_id=?', (sid,))
             db.execute('UPDATE attendance_entries SET move_reason=? WHERE lesson_id=? AND student_id=?', (move_reason if seat != r['original_seat'] else '',lid,sid))
             db.execute("UPDATE seat_change_requests SET status='cancelled',decided_at=? WHERE lesson_id=? AND student_id=? AND status='pending'", (now,lid,sid))

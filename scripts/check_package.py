@@ -79,7 +79,10 @@ def run():
                 with urllib.request.urlopen(req, timeout=5) as response:
                     return response.read() if raw else json.load(response)
             assert b'class-select' in request('/teacher', raw=True)
-            cls = request('/api/v1/teacher/classes', 'POST', {'name': '打包测试班'})
+            cls = request('/api/v1/teacher/classes', 'POST', {'name': '打包测试班', 'year':2026, 'semester':'上学期'})
+            assert cls['year']==2026 and cls['semester']=='上学期'
+            other=request('/api/v1/teacher/classes','POST',{'name':'打包测试班','year':2026,'semester':'下学期'})
+            assert other['id']!=cls['id']
             current = request('/api/v1/teacher/classes/' + cls['id'] + '/rounds', 'POST', {})
             request('/api/v1/teacher/rounds/' + current['round']['id'] + '/seats/1', 'PUT', {'name': '测试同学'})
             workbook = load_workbook(BytesIO(request('/api/v1/teacher/classes/' + cls['id'] + '/export', raw=True)))

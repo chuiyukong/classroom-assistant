@@ -22,6 +22,7 @@
     xhr.onerror = xhr.ontimeout = function () { done('连接中断或超时，请确认教师机正在运行。', null, 0); };
     xhr.send(method === 'GET' ? null : JSON.stringify(data));
   }
+  function classLabel(c) { return c.name + (c.year ? ' · '+c.year+'年 '+c.semester : ' · 未设置学期'); }
   function option(select, value, label) { var o = document.createElement('option'); o.value = value; o.textContent = label; select.appendChild(o); }
   function make(tag, cls, value) { var n = document.createElement(tag); n.className = cls || ''; if (value !== undefined) { n.textContent = value; } return n; }
   function connect(ok) {
@@ -68,11 +69,12 @@
       if (!teacher) { notice(data.round && data.round.is_open ? '新登记已开始，请重新核对座位并登记。' : '当前座位已更新，请以座位图为准。'); }
     }
     if(!teacher && (!data.round || !data.round.is_open)){window.location.replace('/attendance');return;}
-    text('active-class', teacher ? (classNames[data.active_class_id] || '尚未选择上课班级') : (data['class'] ? data['class'].name : '等待上课'));
+    text('active-class', teacher ? (classNames[data.active_class_id] || '尚未选择上课班级') : (data['class'] ? classLabel(data['class']) : '等待上课'));
     state = data; buildMap(data.layout); text('capacity', data.layout.seats.length); text('count', data.count);
-    text('class-title', data['class'] ? data['class'].name : (teacher ? '请选择或新建班级' : '等待教师开启登记'));
+    text('class-title', data['class'] ? classLabel(data['class']) : (teacher ? '请选择或新建班级' : '等待教师开启登记'));
     var round = data.round;
     text('round-status', teacher && data.is_current === false && round ? '历史存档 · ' + new Date(round.opened_at).toLocaleString() : (round && round.is_open ? '座位登记开放中' : '座位登记未开放'));
+    el('round-status').className='operation-status '+(round && round.is_open ? 'is-open':'is-closed');
     text('hint', teacher ? (data.is_current === false ? '存档只读，设备状态显示当前状态。可导出此份存档。' : '点击座位可编辑学生登记、学生备注及跨班级共用的设备配置。') : (data.my_seat ? '这台电脑已登记 ' + data.my_seat + ' 号座位。填写有误请联系教师。' : (round && round.is_open ? '请按电脑或桌面座位号核对实际位置，填写姓名。' : '座位登记未开放')));
     var available = 0, disabled = 0;
     data.layout.seats.forEach(function (s) {
@@ -191,7 +193,7 @@
     api('GET', '/api/v1/teacher/classes', null, function (err, data) {
       if (err) { notice(err, true); return; }
       var select = el('class-select'); select.textContent = ''; option(select, '', '请选择班级');
-      data.classes.forEach(function (c) { option(select, c.id, c.name); classNames[c.id] = c.name; });
+      data.classes.forEach(function (c) { option(select, c.id, classLabel(c)); classNames[c.id] = classLabel(c); });
       classId = chosen || data.active_class_id || (data.classes.length ? data.classes[0].id : ''); select.value = classId;
       historyId = ''; loadRounds(refresh);
     });
@@ -268,9 +270,10 @@
       text('student-urls', data.urls.length ? data.urls.join('   /   ') : '请查看教师机启动窗口');
       text('data-location', 'v' + data.version + ' · ' + (data.limit_one_registration_per_ip ? '按本次登记限制 IP' : 'IP 限制已关闭') + ' · 数据目录：' + data.data_dir);
     });
+    for(var y=new Date().getFullYear()+1;y>=2000;y--){option(el('class-year'),String(y),y+'年');} el('class-year').value=String(new Date().getFullYear());
     el('class-form').onsubmit = function (event) {
       event.preventDefault(); var name = el('class-name').value.trim();
-      api('POST', '/api/v1/teacher/classes', {name: name}, function (err, data) {
+      api('POST', '/api/v1/teacher/classes', {name: name, year:Number(el('class-year').value), semester:el('class-semester').value}, function (err, data) {
         if (err) { notice(err, true); return; } el('class-name').value = ''; loadClasses(data.id); notice('班级已添加，请开始登记。');
       });
     };

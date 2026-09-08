@@ -179,7 +179,8 @@ def create_app(data_dir=None, bootstrap_key=None):
 
     @app.post("/api/v1/teacher/classes")
     def new_class():
-        return jsonify(classes.create(body().get("name"))), 201
+        data = body()
+        return jsonify(classes.create(data.get("name"), data.get("year", 0), data.get("semester", ""))), 201
 
     @app.get("/api/v1/teacher/classes/<class_id>/rounds")
     def list_rounds(class_id):

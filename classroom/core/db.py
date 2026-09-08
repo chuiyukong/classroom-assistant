@@ -107,6 +107,18 @@ CREATE TABLE seat_change_requests (
 """))
 
 
+MIGRATIONS.append((5, """
+CREATE TABLE classes_new (
+ id TEXT PRIMARY KEY, name TEXT NOT NULL, created_at TEXT NOT NULL,
+ deleted_at TEXT, year INTEGER NOT NULL DEFAULT 0, semester TEXT NOT NULL DEFAULT '',
+ UNIQUE(name, year, semester)
+);
+INSERT INTO classes_new(id,name,created_at,deleted_at) SELECT id,name,created_at,deleted_at FROM classes;
+DROP TABLE classes;
+ALTER TABLE classes_new RENAME TO classes;
+"""))
+
+
 class Database:
     def __init__(self, path):
         self.path = Path(path)

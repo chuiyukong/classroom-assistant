@@ -40,14 +40,17 @@ def test_deadline_is_server_enforced_and_persists(app,active):
     assert (datetime.fromisoformat(d['lesson']['attendance_deadline'])-datetime.fromisoformat(d['lesson']['attendance_started_at'])).total_seconds()==60
     with app.extensions['database'].connect(write=True) as db:
         db.execute('UPDATE lessons SET attendance_deadline=? WHERE id=?',((datetime.now(timezone.utc)-timedelta(seconds=1)).isoformat(timespec='seconds'),lid))
-    with pytest.raises(AppError,match='结束'):
-        s.checkin(lid,rows[0]['student_id'],1,'10.0.0.1','a')
+    s.checkin(lid,rows[0]['student_id'],1,'10.0.0.1','a')
     state=s.state()
-    assert state['lesson']['attendance_closed_at'] and state['counts']['absent']==3
-    with app.extensions['database'].connect() as db:
-        assert db.execute('SELECT attendance_closed_at FROM lessons WHERE id=?',(lid,)).fetchone()[0]
-    s.checkin(lid,rows[0]['student_id'],1,teacher=True)
-    assert s.detail(lid)['counts']['actual']==1
+    assert state['lesson']['attendance_closed_at'] is None
+    assert state['counts']['late']==1 and state['counts']['pending']==2
+    s.action(lid,'close')
+    with pytest.raises(AppError,match='结束'):
+        s.checkin(lid,rows[1]['student_id'],2,'10.0.0.2','b')
+    assert s.detail(lid)['counts']['absent']==2
+    s.checkin(lid,rows[1]['student_id'],2,teacher=True)
+    assert s.detail(lid)['counts']['actual']==2
+
 
 
 def test_name_reason_and_teacher_approval_preserve_identity_and_snapshot(app,active):

@@ -155,3 +155,75 @@ body[data-teacher="no"] .page-heading.centered { margin:18px 0 22px; }
 .attendance-seat .name { display:flex; align-items:center; justify-content:center; height:44px; line-height:22px; white-space:normal; word-break:break-all; text-overflow:clip; }
 .attendance-seat .seat-status { margin-top:2px; }
 .draw-panel .attendance-seat .name { height:30px; line-height:26px; white-space:nowrap; word-break:normal; }
+
+/* v1.4: compact physical layout and explicit operating states. */
+.operation-status, #round-status.operation-status { display:inline-block; margin:6px 0; padding:10px 20px; border-radius:8px; border:2px solid #94a6b3; background:#e6edf2; color:#344e60; font-size:20px; font-weight:800; line-height:1.4; }
+.operation-status.is-open, #round-status.is-open { background:#116544; border-color:#0b5135; color:#fff; box-shadow:0 3px 10px #11654426; }
+.operation-status.is-late { background:#934400; border-color:#783600; color:#fff; }
+.operation-status.is-closed { background:#e6edf2; color:#344e60; }
+.big-group { padding:0 5px; }.seat-map { min-width:760px; }
+.group-label { margin:5px 0 2px; line-height:20px; }.big-group-title { padding:4px 0 0; }
+.seat { min-height:46px; padding:5px; margin:2px; width:calc(50% - 4px); }
+.seat-row { margin:0 -2px; }.room-scroll { padding:8px 14px; }
+.podium { margin:6px auto 0; padding:3px 20px; }
+.attendance-seat, .draw-panel .attendance-seat { display:flex; height:54px; min-height:54px; padding:3px; }
+.attendance-seat .number { position:static; width:22px; margin-right:3px; align-self:center; }
+.attendance-seat .name, .draw-panel .attendance-seat .name { display:block; height:24px; line-height:24px; font-size:18px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.attendance-seat .seat-content { width:auto; text-align:center; }
+.attendance-seat .seat-status, .draw-panel .seat-status { display:block; margin:0; font-size:16px; line-height:20px; }
+.attendance-seat-map .seat-row, .draw-panel .attendance-seat-map .seat-row { height:58px; }
+.attendance-seat.pending { background:#f2f5f8; border-color:#b9c9d5; }
+.attendance-seat.late { background:#fff0d6; border-color:#c99742; }
+.student-room-head { padding:12px 16px 0; }.seat-legend { margin:6px 16px; }
+.new-class .inline { flex-wrap:wrap; gap:6px; }.new-class select { width:120px; }
+body[data-module="rollcall"] .topbar { height:44px; }
+body[data-module="rollcall"] main { padding:6px 18px; }
+body[data-module="rollcall"] .module-nav { margin:0 0 4px; padding:0; }
+body[data-module="rollcall"] .module-nav a { padding:5px 16px; margin-bottom:3px; }
+body[data-module="rollcall"] .page-heading.centered { display:flex; align-items:center; justify-content:center; flex-wrap:wrap; margin:4px 0; }
+body[data-module="rollcall"] .page-heading.centered h1 { font-size:28px; margin:0 18px 0 0; }
+body[data-module="rollcall"] .class-subtitle { font-size:22px; margin:0 18px 0 0; }
+body[data-module="rollcall"] .connection { padding:3px 12px; }
+.notice:empty { display:none; }
+body[data-module="rollcall"] .notice { margin:2px 0; }
+.draw-panel { padding:8px 14px; }
+.draw-toolbar p { margin:0; display:inline; margin-right:12px; }
+.lesson-help { font-size:16px; margin:2px 0; color:#536a77; }
+#draw-name { display:inline-block; font-size:30px; min-height:40px; margin:2px 24px 2px 0; vertical-align:middle; }
+.draw-panel .attendance-seat { height:40px; min-height:40px; }
+.draw-panel .attendance-seat-map .seat-row { height:44px; }
+.draw-panel .attendance-seat .name { height:20px; line-height:20px; font-size:18px; }
+.draw-panel .attendance-seat .seat-status { line-height:16px; }
+.draw-panel .room-scroll { padding:4px 0; }
+#draw-history { max-height:48px; overflow:auto; font-size:16px; }
+.draw-panel .attendance-seat.absent { background:#fbe8e2; border-color:#d3907b; }
+.draw-panel .seat.draw-highlight { background:#145e51; border:3px solid #e8b654; }
+
+.draw-panel .lesson-help { display:none; }
+.draw-panel .group-label { margin:0; line-height:18px; }
+.draw-panel .attendance-seat-map .seat-row { height:42px; }
+.draw-panel .attendance-seat { height:38px; min-height:38px; padding:0 3px; }
+
+body[data-module="attendance"] .attendance-seat { height:46px; min-height:46px; padding:1px 3px; }
+body[data-module="attendance"] .attendance-seat-map .seat-row { height:50px; }
+body[data-teacher="no"] .topbar { height:44px; }
+body[data-teacher="no"] main { padding:8px 16px; }
+body[data-teacher="no"] .module-nav { margin:0 0 4px; padding:0; }
+body[data-teacher="no"] .module-nav a { padding:5px 16px; margin-bottom:3px; }
+body[data-teacher="no"] .page-heading.centered { display:flex; flex-wrap:wrap; align-items:center; justify-content:center; margin:6px 0; }
+body[data-teacher="no"] .page-heading.centered h1 { font-size:28px; margin:0 16px 0 0; }
+body[data-teacher="no"] .class-subtitle { font-size:22px; margin:0 16px 0 0; }
+body[data-teacher="no"] .connection { padding:3px 12px; }
+
+.draw-panel .seat.draw-highlight { border-width:1px; outline:2px solid #e8b654; outline-offset:0; }
+
+body[data-teacher="no"] .student-room-head { padding:8px 14px; }
+body[data-teacher="no"] .student-room-head p { margin:0; }
+body[data-teacher="no"] .operation-status { font-size:18px; padding:8px 14px; margin:0; }
+body[data-teacher="no"] .hint { margin:2px 14px; }
+body[data-teacher="no"] .seat-legend { margin:2px 14px; }
+body[data-teacher="no"] .group-label { margin:0; line-height:18px; }
+body[data-teacher="no"] .attendance-seat-map .seat-row { height:44px; }
+body[data-teacher="no"] .attendance-seat { height:40px; min-height:40px; padding:0 3px; }
+body[data-teacher="no"] .attendance-seat .name { height:20px; line-height:20px; }
+body[data-teacher="no"] .attendance-seat .seat-status { line-height:18px; }

@@ -75,7 +75,7 @@ def test_late_close_teacher_and_rollcall_source(app, active):
     with pytest.raises(AppError):
         draw.draw(lid)
     with app.extensions['database'].connect(write=True) as db:
-        db.execute('UPDATE lessons SET attendance_started_at=? WHERE id=?', ((datetime.now(timezone.utc)-timedelta(minutes=8)).isoformat(),lid))
+        db.execute('UPDATE lessons SET attendance_deadline=? WHERE id=?', ((datetime.now(timezone.utc)-timedelta(minutes=3)).isoformat(),lid))
     s.checkin(lid, rows[0]['student_id'], 64, '10.0.0.1','a', move_reason='device_fault')
     signed = s.detail(lid)['entries'][0]
     assert signed['status'] == 'late' and 175 < signed['late_seconds'] < 185

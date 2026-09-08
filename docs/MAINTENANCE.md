@@ -1,5 +1,17 @@
 # 维护、数据库与跨账号交接
 
+
+## 1.4.0 当前规则（覆盖下方历史时限说明）
+
+schema 5：保留迁移 1—4，新增 classes.year/semester，唯一约束为 name/year/semester。迁移通过新表复制全部班级、保留 id 后替换原表；迁移专用连接外键关闭，正常业务连接始终开启，测试以 foreign_key_check 核对关联。旧班 year=0、semester='' 表示未设置，不推断学期，不改名；暂无旧班补录界面。新建 API POST /teacher/classes 接受 year 整数 2000—2100、semester 上学期/下学期，旧客户端同时省略时兼容。
+
+签到截止不再关闭课堂：删除 expire_due/_expire 自动写关闭时间。checkin 在事务中比较服务端当前时间与 attendance_deadline，恰好截止也计 late（秒数可为 0），其后记实际迟到秒数。关闭行为只由 close/end/切换课堂/回收班级等教师操作触发；到期未到保持 pending，关闭时才转 absent。已发布旧课堂的 attendance_closed_at 不自动清除，历史签到状态不重算。旧无 deadline 的课堂沿用已保存 late_after 作为兼容阈值；新 open 都有 deadline，页面不显示宽限输入。v1 late_after 参数暂留兼容，不影响新签到。
+
+前端依据服务器时间偏移显示倒计时/已超时，不能凭浏览器计时决定服务端资格。轮询不重建学生输入控件。点名候选仍通过 attendance.candidates，未签到视觉状态不改变抽样规则。班级年份学期仅在选座与数据管理显示；日志用稳定 class_id 隔离。
+
+维护者每次发布同步 docs/全部功能与流程.md、docs/功能测试指南.md、docs/images/function-flow.svg 和 README 全功能表；未实现功能保留在路线图。测试用合成数据；新模块浏览器测试真实等待一分钟。数据库升级自动备份，回退先恢复备份，不能直接用旧 EXE 打开 schema 5。
+
+
 ## 1.3.0 维护更新
 
 当前 schema 4，自动升级备份。新增签到截止时间、课堂布局快照和长期换座申请。旧版开放签到不追设截止时间，新发起时默认 10 分钟。课堂结束前完成审批和纠错，历史只读。

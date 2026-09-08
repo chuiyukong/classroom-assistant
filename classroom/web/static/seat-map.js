@@ -31,7 +31,8 @@
       var state=signed?'present':(moved?'moved':'pending'),off=disabled.indexOf(n)!==-1;
       var status=off?'设备停用':(signed?'已签到':(moved?'已换座':(r?'未签到':'')));
       if(options.teacher && r && r.status && !moved){status=labels[r.status];state=r.status;}
-      if(options.rollcall){status=off?'设备停用':'';state='pending';}
+      if(options.rollcall && !options.attendance){status=off?'设备停用':'';state='pending';}
+      if(options.rollcall && options.attendance && r && !signed){state='absent';status='未签到';}
       btn.className='seat attendance-seat '+state+(off?' unavailable':'')+(this.highlighted===n?' draw-highlight':'');
       btn.querySelector('.name').textContent=r?r.name:'空座位';btn.querySelector('.seat-status').textContent=status;
       btn.disabled=!!options.blocked||off||signed||!!options.rollcall;
