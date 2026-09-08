@@ -18,7 +18,17 @@ def prepare_data(data_dir=None):
     config = root / "config"
     config.mkdir(exist_ok=True)
     manifest = json.loads((resource_dir() / 'legacy-hashes.json').read_text(encoding='utf-8'))
-    if all((config / n).exists() and hashlib.sha256((config / n).read_bytes()).hexdigest() == h for n, h in manifest.items()):
+    def original_file(name):
+        target = config / name
+        if not target.exists():
+            return False
+        if name.endswith('.json'):
+            try:
+                return json.loads(target.read_text(encoding='utf-8-sig')) == json.loads((resource_dir() / 'templates' / 'classroom-64-v1' / name).read_text(encoding='utf-8-sig'))
+            except (ValueError, OSError):
+                return False
+        return hashlib.sha256(target.read_bytes()).hexdigest() == manifest[name]
+    if all(original_file(n) for n in manifest):
         backup = config / 'templates' / 'classroom-64-v1'
         backup.mkdir(parents=True, exist_ok=True)
         for name in manifest:

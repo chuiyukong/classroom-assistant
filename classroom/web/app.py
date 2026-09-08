@@ -111,6 +111,9 @@ def create_app(data_dir=None, bootstrap_key=None):
     @app.get("/")
     def student_page():
         init_session()
+        current = seating.get_current_arrangement()
+        if not current['round'] or not current['round']['is_open']:
+            return redirect('/attendance')
         return render_template("student.html", csrf=session["csrf"])
 
     @app.get("/teacher")
@@ -255,8 +258,8 @@ def create_app(data_dir=None, bootstrap_key=None):
 
     @app.post('/api/v1/teacher/lessons/<lid>/<action>')
     def lesson_action(lid, action):
-        body()
-        return jsonify(attendance.action(lid, action))
+        data = body()
+        return jsonify(attendance.action(lid, action, data.get('duration_minutes', 10)))
 
     @app.put('/api/v1/teacher/lessons/<lid>/students/<sid>')
     def attendance_correct(lid, sid):
@@ -274,7 +277,12 @@ def create_app(data_dir=None, bootstrap_key=None):
     @app.post('/api/v1/student/attendance')
     def student_checkin():
         data = body()
-        return jsonify(attendance.checkin(data.get('lesson_id'), data.get('student_id'), data.get('seat_no'), request.remote_addr, session['client_id']))
+        return jsonify(attendance.checkin(data.get('lesson_id'), data.get('student_id'), data.get('seat_no'), request.remote_addr, session['client_id'], name=data.get('name'), move_reason=data.get('move_reason','')))
+
+    @app.post('/api/v1/teacher/seat-changes/<request_id>')
+    def decide_seat_change(request_id):
+        attendance.decide_move(request_id, body().get('approve'))
+        return jsonify(ok=True)
 
     @app.post('/api/v1/teacher/rollcall/<lid>')
     def draw(lid):

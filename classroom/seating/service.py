@@ -51,7 +51,7 @@ class SeatingService:
                 raise AppError(f'请先选择“{opened["name"]}”并结束其当前登记，再发起新登记', 409, 'round_already_open')
             previous = db.execute('SELECT * FROM rounds WHERE class_id=? ORDER BY number DESC LIMIT 1', (class_id,)).fetchone()
             if expected_current_id is not UNSET and expected_current_id != (previous['id'] if previous else None):
-                raise AppError('当前安排已变更，请刷新后重试', 409, 'stale_arrangement')
+                raise AppError('当前座位已变更，请刷新后重试', 409, 'stale_arrangement')
             now = timestamp()
             if previous:
                 db.execute('''UPDATE registrations SET student_note=COALESCE(
@@ -138,7 +138,7 @@ class SeatingService:
             if db.execute('SELECT 1 FROM registrations WHERE round_id=? AND client_id=?', (round_id, client_id)).fetchone():
                 raise AppError('本浏览器已经登记，请联系教师修改', 409, 'already_registered')
             if any(name_key(r['name']) == name_key(name) for r in db.execute('SELECT name FROM registrations WHERE round_id=?', (round_id,))):
-                raise AppError('当前安排已存在同名学生，请到教师端登记', 409, 'duplicate_name')
+                raise AppError('当前座位已存在同名学生，请到教师端登记', 409, 'duplicate_name')
             sid = self.students.resolve(db, row['class_id'], name, student_submission=True)
             record_id = uuid4().hex
             db.execute('''INSERT INTO registrations(id, round_id, seat_no, name, client_id, updated_at, source_ip, ip_key, student_id)
@@ -211,6 +211,22 @@ class SeatingService:
             db.execute('UPDATE rounds SET is_open=0, closed_at=COALESCE(closed_at,?) WHERE class_id=?', (timestamp(), cid))
             db.execute('UPDATE classroom_state SET active_class_id=NULL WHERE active_class_id=?', (cid,))
 
+    def approve_move(self, db, round_id, student_id, from_seat, to_seat):
+        """Explicit teacher approval; keep identity, notes and historical seats intact."""
+        row = self._round(db, round_id)
+        self._require_current(db, row)
+        if row['is_open']:
+            raise AppError('请先结束座位登记，再批准长期换座', 409)
+        self._seat(db, row, to_seat)
+        current = db.execute('SELECT * FROM registrations WHERE round_id=? AND student_id=?', (round_id, student_id)).fetchone()
+        if not current or current['seat_no'] != from_seat:
+            raise AppError('该生当前座位已变更，请重新核对申请', 409)
+        if self.seats.read(db, row['layout_id'])[to_seat]['disabled']:
+            raise AppError('目标设备已停用，请先修复或选择其他座位', 409)
+        if db.execute('SELECT 1 FROM registrations WHERE round_id=? AND seat_no=?', (round_id, to_seat)).fetchone():
+            raise AppError('目标座位已有固定登记，请先在在线选座中调整，不能覆盖其他学生', 409)
+        db.execute('UPDATE registrations SET seat_no=?,updated_at=? WHERE id=?', (to_seat, timestamp(), current['id']))
+
     @staticmethod
     def _round(db, round_id):
         if not isinstance(round_id, str) or len(round_id) != 32:
@@ -224,7 +240,7 @@ class SeatingService:
     @staticmethod
     def _require_current(db, row):
         if row['archived_at'] is not None:
-            raise AppError('历史存档只读，请选择当前安排', 409, 'history_readonly')
+            raise AppError('历史存档只读，请选择当前座位', 409, 'history_readonly')
 
     def _seat(self, db, row, seat_no):
         if type(seat_no) is not int or seat_no not in {s['number'] for s in self.layouts.get(row['layout_id'], db)['seats']}:

@@ -2,6 +2,7 @@
 (function () {
   'use strict';
   var teacher = document.body.getAttribute('data-mode') === 'teacher';
+  if(document.getElementById('seating-nav')){document.getElementById('seating-nav').className='current';}
   var csrf = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
   var state = null, classId = '', historyId = '', seatButtons = {}, layoutId = '', selected = null;
   var pending = null, busy = false, connected = false, version = 0, timer = null;
@@ -24,7 +25,7 @@
   function option(select, value, label) { var o = document.createElement('option'); o.value = value; o.textContent = label; select.appendChild(o); }
   function make(tag, cls, value) { var n = document.createElement(tag); n.className = cls || ''; if (value !== undefined) { n.textContent = value; } return n; }
   function connect(ok) {
-    connected = ok; text('connection', ok ? '● 已连接 · 自动更新' : '● 连接中断 · 正在重连');
+    connected = ok; text('connection', ok ? '状态：已连接' : '状态：连接中断');
     el('connection').className = 'connection' + (ok ? '' : ' offline');
     if (!ok) { for (var k in seatButtons) { if (Object.prototype.hasOwnProperty.call(seatButtons, k)) { seatButtons[k].disabled = true; } } }
     buttons();
@@ -64,14 +65,15 @@
   function render(data) {
     if (state && state.round && (!data.round || state.round.id !== data.round.id)) {
       closeDialog(); pending = null;
-      if (!teacher) { notice(data.round && data.round.is_open ? '新登记已开始，请重新核对座位并登记。' : '当前安排已更新，请以座位图为准。'); }
+      if (!teacher) { notice(data.round && data.round.is_open ? '新登记已开始，请重新核对座位并登记。' : '当前座位已更新，请以座位图为准。'); }
     }
-    text('active-title', '在线选座系统 · ' + (teacher ? (classNames[data.active_class_id] || '尚未选择上课班级') : (data['class'] ? data['class'].name : '等待上课')));
+    if(!teacher && (!data.round || !data.round.is_open)){window.location.replace('/attendance');return;}
+    text('active-class', teacher ? (classNames[data.active_class_id] || '尚未选择上课班级') : (data['class'] ? data['class'].name : '等待上课'));
     state = data; buildMap(data.layout); text('capacity', data.layout.seats.length); text('count', data.count);
     text('class-title', data['class'] ? data['class'].name : (teacher ? '请选择或新建班级' : '等待教师开启登记'));
     var round = data.round;
-    text('round-status', round ? (data.is_current === false ? '历史存档 · 只读' : '当前安排 · ' + (round.is_open ? '登记开放中' : '登记已结束，可查看')) + ' · ' + new Date(round.opened_at).toLocaleString() : '尚未开始登记');
-    text('hint', teacher ? (data.is_current === false ? '存档只读，设备状态显示当前状态。可导出此份存档。' : '点击座位可编辑学生登记、学生备注及跨班级共用的设备配置。') : (data.my_seat ? '这台电脑已登记 ' + data.my_seat + ' 号座位。填写有误请联系教师。' : (round && round.is_open ? '请按电脑或桌面座位号核对实际位置，填写姓名。' : '当前安排供查看，等待教师开放登记。')));
+    text('round-status', teacher && data.is_current === false && round ? '历史存档 · ' + new Date(round.opened_at).toLocaleString() : (round && round.is_open ? '座位登记开放中' : '座位登记未开放'));
+    text('hint', teacher ? (data.is_current === false ? '存档只读，设备状态显示当前状态。可导出此份存档。' : '点击座位可编辑学生登记、学生备注及跨班级共用的设备配置。') : (data.my_seat ? '这台电脑已登记 ' + data.my_seat + ' 号座位。填写有误请联系教师。' : (round && round.is_open ? '请按电脑或桌面座位号核对实际位置，填写姓名。' : '座位登记未开放')));
     var available = 0, disabled = 0;
     data.layout.seats.forEach(function (s) {
       var btn = seatButtons[s.number], item = record(s.number), config = device(s.number);
@@ -180,7 +182,7 @@
     if (!classId) { done(); return; }
     api('GET', '/api/v1/teacher/classes/' + classId + '/rounds', null, function (err, data) {
       if (err) { notice(err, true); done(); return; }
-      var select = el('round-select'); select.textContent = ''; option(select, '', '当前安排');
+      var select = el('round-select'); select.textContent = ''; option(select, '', '当前座位');
       data.rounds.forEach(function (r, i) { if (i > 0) { option(select, r.id, '存档 ' + r.number + ' · ' + new Date(r.opened_at).toLocaleString()); } });
       select.value = historyId; done();
     });
@@ -275,7 +277,7 @@
     el('class-select').onchange = function () { closeDialog(); classId = this.value; historyId = ''; state = null; profiles = []; el('notes-panel').hidden = true; version++; loadRounds(refresh); notice(''); };
     el('round-select').onchange = function () { closeDialog(); historyId = this.value; state = null; refresh(); notice(''); };
     el('start-round').onclick = function () {
-      if (state && state.round && !confirm('发起空白的新登记？该班当前安排将自动转为只读存档，学生备注和设备配置继续保留。')) { return; }
+      if (state && state.round && !confirm('发起空白的新登记？该班当前座位将自动转为只读存档，学生备注和设备配置继续保留。')) { return; }
       busy = true; buttons();
       api('POST', '/api/v1/teacher/classes/' + classId + '/rounds', {expected_current_id: state && state.round ? state.round.id : null}, function (err) {
         busy = false; if (err) { notice(err, true); refresh(); return; } historyId = ''; loadRounds(refresh); notice('登记已开放，请通过极域打开学生网址。');

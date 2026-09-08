@@ -93,6 +93,20 @@ CREATE TABLE rollcall_draws (
 """))
 
 
+MIGRATIONS.append((4, """
+ALTER TABLE lessons ADD COLUMN attendance_deadline TEXT;
+ALTER TABLE lessons ADD COLUMN layout_id TEXT;
+UPDATE lessons SET layout_id=(SELECT layout_id FROM rounds WHERE rounds.id=lessons.round_id);
+ALTER TABLE attendance_entries ADD COLUMN move_reason TEXT NOT NULL DEFAULT '';
+CREATE TABLE seat_change_requests (
+ id TEXT PRIMARY KEY, lesson_id TEXT NOT NULL REFERENCES lessons(id),
+ student_id TEXT NOT NULL, from_seat INTEGER NOT NULL, to_seat INTEGER NOT NULL,
+ status TEXT NOT NULL DEFAULT 'pending', created_at TEXT NOT NULL, decided_at TEXT,
+ UNIQUE(lesson_id, student_id)
+);
+"""))
+
+
 class Database:
     def __init__(self, path):
         self.path = Path(path)

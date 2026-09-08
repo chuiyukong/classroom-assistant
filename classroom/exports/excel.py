@@ -88,6 +88,6 @@ class ExcelExportService:
                 result.writestr(info, xml.encode("utf-8") if info.filename == cfg["sheet_path"] else original.read(info.filename))
         output.seek(0)
         safe_name = re.sub(r'[<>:"/\\|?*\x00-\x1f]', "_", data["class"]["name"]).rstrip(". ") or "班级"
-        label = '当前安排' if data['is_current'] else '存档'
+        label = '当前座位' if data['is_current'] else '存档'
         name = f'{safe_name}_座位表_{label}{data["round"]["number"]}_{datetime.now():%Y%m%d-%H%M%S}.xlsx'
         return output, name

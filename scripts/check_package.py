@@ -26,6 +26,13 @@ def run():
     exe = ROOT / 'dist' / ('v' + VERSION) / 'ClassroomAssistant.exe'
     with tempfile.TemporaryDirectory(prefix='classroom-package-') as directory:
         data_dir = Path(directory)
+        # Reproduce the real Windows CRLF configuration that v1.2 misidentified.
+        config_dir = data_dir / 'config'
+        config_dir.mkdir()
+        legacy = ROOT / 'resources/templates/classroom-64-v1'
+        for name in ('layout.json', 'excel-template.json'):
+            (config_dir / name).write_bytes((legacy / name).read_text(encoding='utf-8').replace('\n', '\r\n').encode('utf-8'))
+        (config_dir / 'seat-template.xlsx').write_bytes((legacy / 'seat-template.xlsx').read_bytes())
         with socket.socket() as probe:
             probe.bind(('127.0.0.1', 0))
             port = probe.getsockname()[1]
@@ -48,8 +55,10 @@ def run():
             else:
                 raise RuntimeError('Packaged server did not start')
             assert len(state['layout']['seats']) == 64
+            assert state['layout']['id'] == 'classroom-64-v2'
+            assert (config_dir / 'seat-template.xlsx').read_bytes() == (ROOT / 'resources/seat-template.xlsx').read_bytes()
             with urllib.request.urlopen(origin + '/', timeout=3) as response:
-                assert b'app.js' in response.read()
+                assert b'modules.js' in response.read()
             with urllib.request.urlopen(origin + '/static/app.js', timeout=3) as response:
                 assert response.status == 200
             try:
@@ -88,6 +97,7 @@ def run():
             lid = lesson['lesson']['id']
             assert request('/api/v1/teacher/rollcall/' + lid, 'POST', {})['source'] == 'seating'
             request('/api/v1/teacher/lessons/' + lid + '/open', 'POST', {})
+            assert request('/api/v1/teacher/lessons/' + lid)['lesson']['attendance_deadline']
             request('/api/v1/teacher/lessons/' + lid + '/students/' + lesson['entries'][0]['student_id'], 'PUT', {'status': 'present', 'seat_no':64})
             assert request('/api/v1/teacher/lessons/' + lid)['counts']['actual'] == 1
             assert request('/api/v1/teacher/lessons/' + lid + '/export', raw=True).startswith(b'\xef\xbb\xbf')

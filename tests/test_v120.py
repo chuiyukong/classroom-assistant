@@ -25,7 +25,7 @@ def test_snapshot_move_long_leave_and_next_lesson(app, active):
     s, lid, rows = lesson(app, active)
     s.action(lid, 'open')
     s.mark(lid, rows[0]['student_id'], 'long_leave')
-    s.checkin(lid, rows[1]['student_id'], 64, '10.0.0.2', 'client2')
+    s.checkin(lid, rows[1]['student_id'], 64, '10.0.0.2', 'client2', move_reason='device_fault')
     assert s.detail(lid)['counts']['actual'] == 1
     assert app.extensions['seating'].get_current_arrangement()['registrations'][1]['seat_no'] == 2
     next_lesson = s.start(active[1]['id'])
@@ -35,7 +35,7 @@ def test_snapshot_move_long_leave_and_next_lesson(app, active):
     with pytest.raises(AppError):
         s.mark(lid, rows[0]['student_id'], 'pending')
     new_id = next_lesson['lesson']['id']; s.action(new_id, 'open')
-    s.checkin(new_id, rows[0]['student_id'], 2, '10.0.0.1', 'client1')
+    s.checkin(new_id, rows[0]['student_id'], 2, '10.0.0.1', 'client1', move_reason='device_fault')
     assert s.start(active[1]['id'])['entries'][0]['status'] == 'pending'
     assert s.detail(lid)['entries'][0]['status'] == 'long_leave'
 
@@ -56,7 +56,7 @@ def test_same_seat_race_and_ip_spoof_resistance(app, active):
     s, lid, rows = lesson(app, active); s.action(lid, 'open')
     def submit(i):
         try:
-            s.checkin(lid, rows[i]['student_id'], 64, '10.0.0.' + str(i+1), 'c'+str(i)); return True
+            s.checkin(lid, rows[i]['student_id'], 64, '10.0.0.' + str(i+1), 'c'+str(i), move_reason='device_fault'); return True
         except AppError:
             return False
     with ThreadPoolExecutor(max_workers=3) as pool:
@@ -65,7 +65,7 @@ def test_same_seat_race_and_ip_spoof_resistance(app, active):
     winner_index = next(i for i, r in enumerate(rows) if r['student_id'] == winner['student_id'])
     loser = next(r for r in rows if r['student_id'] != winner['student_id'])
     with pytest.raises(AppError, match='本机'):
-        s.checkin(lid, loser['student_id'], 63, '10.0.0.'+str(winner_index+1), 'different-browser')
+        s.checkin(lid, loser['student_id'], 63, '10.0.0.'+str(winner_index+1), 'different-browser', move_reason='device_fault')
 
 
 def test_late_close_teacher_and_rollcall_source(app, active):
@@ -76,7 +76,7 @@ def test_late_close_teacher_and_rollcall_source(app, active):
         draw.draw(lid)
     with app.extensions['database'].connect(write=True) as db:
         db.execute('UPDATE lessons SET attendance_started_at=? WHERE id=?', ((datetime.now(timezone.utc)-timedelta(minutes=8)).isoformat(),lid))
-    s.checkin(lid, rows[0]['student_id'], 64, '10.0.0.1','a')
+    s.checkin(lid, rows[0]['student_id'], 64, '10.0.0.1','a', move_reason='device_fault')
     signed = s.detail(lid)['entries'][0]
     assert signed['status'] == 'late' and 175 < signed['late_seconds'] < 185
     assert draw.draw(lid)['student_id'] == rows[0]['student_id']
@@ -134,7 +134,7 @@ def test_restart_switch_round_and_class_isolation(app, active):
 
 def test_teacher_security_recycle_restore_and_export(app,active):
     s,lid,rows=lesson(app,active);s.action(lid,'open')
-    c=app.test_client();page=c.get('/')
+    c=app.test_client();page=c.get('/',follow_redirects=True)
     token=re.search('name="csrf-token" content="([^"]+)"',page.text).group(1)
     headers={'Origin':'http://localhost','X-CSRF-Token':token}
     assert c.post('/api/v1/teacher/classes/manage',json={'ids':[active[0]['id']],'action':'delete'},headers=headers).status_code==403

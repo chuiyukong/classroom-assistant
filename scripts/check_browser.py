@@ -116,20 +116,21 @@ def run():
                 ctx_b.set_offline(False)
                 b.locator('#connection:not(.offline)').wait_for(timeout=20000)
                 admin.locator('#close-round').click()
-                a.locator('#round-status').filter(has_text='登记已结束').wait_for()
+                a.wait_for_url('**/attendance')
                 assert a.locator('[data-seat="3"]').is_disabled()
                 with admin.expect_download() as download:
                     admin.locator('#export').click()
                 download.value.save_as(output / 'browser-export.xlsx')
                 admin.locator('#start-round').click()
-                admin.locator('#round-status').filter(has_text='当前安排 · 登记开放中').wait_for()
-                a.locator('#notice').filter(has_text='新登记已开始').wait_for()
+                admin.locator('#round-status').filter(has_text='座位登记开放中').wait_for()
+                a.locator('#seating-nav').wait_for(); a.locator('#seating-nav').click()
+                b.goto(origin + '/')
                 assert a.locator('[data-seat="1"]').is_enabled()
                 admin.locator('#round-select').select_option(index=1)
                 admin.locator('#round-status').filter(has_text='历史存档').wait_for()
                 assert admin.locator('[data-seat="1"]').is_disabled()
                 admin.locator('#round-select').select_option(index=0)
-                admin.locator('#round-status').filter(has_text='当前安排 · 登记开放中').wait_for()
+                admin.locator('#round-status').filter(has_text='座位登记开放中').wait_for()
 
                 # Real HTTP: 64 cookie-isolated clients all submit to the running server.
                 cls = app.extensions['classes'].list()[0]
