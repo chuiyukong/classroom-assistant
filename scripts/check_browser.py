@@ -104,12 +104,7 @@ def run():
                 admin.locator('#device-save').click()
                 admin.locator('#device-message').filter(has_text='已保存').wait_for()
                 admin.locator('#dialog-close').click()
-                admin.locator('#student-notes').click()
-                admin.locator('#notes-student').select_option(index=1)
-                admin.locator('#notes-text').fill('仅教师可见的学生情况')
-                admin.locator('#notes-save').click()
-                admin.locator('#notes-message').filter(has_text='已保存').wait_for()
-                admin.locator('#student-notes').click()
+                assert admin.locator('#student-notes').count()==0
                 ctx_b.set_offline(True)
                 b.locator('#connection.offline').wait_for(timeout=20000)
                 assert b.locator('[data-seat="3"]').is_disabled()

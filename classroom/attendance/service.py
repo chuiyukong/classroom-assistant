@@ -99,7 +99,7 @@ class AttendanceService:
                 rows = result['entries']
                 result.pop('counts')
                 result.pop('change_requests')
-                result['entries'] = [{'student_id': r['student_id'], 'name': r['name'], 'original_seat': r['original_seat'], 'seat_no': r['seat_no']} for r in rows]
+                result['entries'] = [{'student_id': r['student_id'], 'name': r['name'], 'original_seat': r['original_seat'], 'seat_no': r['seat_no'], 'status': r['status'] if r['status'] in ('present','late','long_leave') else 'pending'} for r in rows]
                 own = db.execute('SELECT student_id FROM attendance_entries WHERE lesson_id=? AND (source_ip=? OR client_id=?)', (lesson['id'], normalize_ip(ip), client_id)).fetchone()
                 result['my_student_id'] = own[0] if own else None
                 data = self.seating.get_current_arrangement(db)

@@ -95,7 +95,6 @@
     if (!teacher) { return; }
     el('start-round').disabled = !connected || !classId || busy || !state || !state.is_current;
     el('publish-class').disabled = !connected || !classId || busy || !state || state.active_class_id === classId;
-    el('student-notes').disabled = !connected || !classId || busy;
     el('class-select').disabled = busy; el('round-select').disabled = busy;
     el('close-round').disabled = !connected || busy || !state || !state.round || !state.round.is_open || !state.is_current;
     el('export').disabled = !connected || busy || !state || !state.round;
@@ -231,53 +230,19 @@
         busy = false; notice(err || '已设为当前上课班级，学生页面会自动更新。', !!err); refresh();
       });
     };
-    el('student-notes').onclick = function () {
-      el('notes-panel').hidden = !el('notes-panel').hidden;
-      if (!el('notes-panel').hidden) {
-        loadProfiles(function () {
-          var select = el('notes-student'); select.textContent = ''; option(select, '', '新增未就座学生记录');
-          profiles.forEach(function (p) { option(select, p.id, p.name + ' · 编号 ' + p.id.slice(0, 8)); });
-          el('notes-name').value = ''; el('notes-name').disabled = false; el('notes-text').value = ''; text('notes-message', '');
-          el('notes-panel').scrollIntoView({block: 'nearest'});
-        });
-      }
-    };
-    el('notes-student').onchange = function () {
-      var p = profile(this.value); el('notes-name').value = p ? p.name : ''; el('notes-name').disabled = !!p;
-      el('notes-text').value = p ? p.note : ''; text('notes-message', '');
-    };
-    el('notes-form').onsubmit = function (event) {
-      event.preventDefault(); if (busy) { return; }
-      var id = el('notes-student').value, payload = {note: el('notes-text').value};
-      var url = '/api/v1/teacher/students/' + id + '/note', method = 'PUT';
-      if (!id) { payload.name = el('notes-name').value.trim(); url = '/api/v1/teacher/classes/' + classId + '/students'; method = 'POST'; }
-      busy = true; buttons(); el('notes-save').disabled = true;
-      api(method, url, payload, function (err, result) {
-        busy = false; buttons(); el('notes-save').disabled = false;
-        text('notes-message', err || '学生备注已保存，仅教师可见。');
-        if (!err) {
-          loadProfiles(function () {
-            var select = el('notes-student'); select.textContent = ''; option(select, '', '新增未就座学生记录');
-            profiles.forEach(function (p) { option(select, p.id, p.name + ' · 编号 ' + p.id.slice(0, 8)); });
-            select.value = id || result.id; el('notes-name').disabled = true;
-          });
-          refresh();
-        }
-      });
-    };
     api('GET', '/api/v1/teacher/info', null, function (err, data) {
       if (err) { notice(err, true); return; }
       text('student-urls', data.urls.length ? data.urls.join('   /   ') : '请查看教师机启动窗口');
       text('data-location', 'v' + data.version + ' · ' + (data.limit_one_registration_per_ip ? '按本次登记限制 IP' : 'IP 限制已关闭') + ' · 数据目录：' + data.data_dir);
     });
-    for(var y=new Date().getFullYear()+1;y>=2000;y--){option(el('class-year'),String(y),y+'年');} el('class-year').value=String(new Date().getFullYear());
+    for(var y=new Date().getFullYear()+10;y>=new Date().getFullYear()-10;y--){option(el('class-year'),String(y),y+'年');} el('class-year').value=String(new Date().getFullYear());
     el('class-form').onsubmit = function (event) {
       event.preventDefault(); var name = el('class-name').value.trim();
       api('POST', '/api/v1/teacher/classes', {name: name, year:Number(el('class-year').value), semester:el('class-semester').value}, function (err, data) {
         if (err) { notice(err, true); return; } el('class-name').value = ''; loadClasses(data.id); notice('班级已添加，请开始登记。');
       });
     };
-    el('class-select').onchange = function () { closeDialog(); classId = this.value; historyId = ''; state = null; profiles = []; el('notes-panel').hidden = true; version++; loadRounds(refresh); notice(''); };
+    el('class-select').onchange = function () { closeDialog(); classId = this.value; historyId = ''; state = null; profiles = []; version++; loadRounds(refresh); notice(''); };
     el('round-select').onchange = function () { closeDialog(); historyId = this.value; state = null; refresh(); notice(''); };
     el('start-round').onclick = function () {
       if (state && state.round && !confirm('发起空白的新登记？该班当前座位将自动转为只读存档，学生备注和设备配置继续保留。')) { return; }

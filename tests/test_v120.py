@@ -99,7 +99,7 @@ def test_names_disabled_and_privacy(app, active):
         s.checkin(lid,rows[0]['student_id'],64,'10.0.0.1','a')
     s.mark(lid,rows[0]['student_id'],'long_leave')
     text=json.dumps(s.state(True,'10.0.0.1','a'))
-    assert 'long_leave' not in text and 'source_ip' not in text and 'PRIVATE' not in text
+    assert 'long_leave' in text and 'source_ip' not in text and 'PRIVATE' not in text
     assert 64 not in s.state(True,'10.0.0.1','a')['available_seats']
 
 

@@ -4,26 +4,26 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="csrf-token" content="{{ csrf }}">
-  <title>{% block title %}课堂助手{% endblock %}</title>
+  <title>智慧课堂综合平台</title>
   <link rel="icon" href="data:,">
   <link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}">
 </head>
 <body data-mode="{% block mode %}{% endblock %}">
-  <header class="topbar"><div class="brand"><span class="brand-mark">课</span><span>课堂助手</span></div><span class="role">{% block role %}{% endblock %}</span></header>
+  <header class="topbar"><div class="brand"><span class="brand-mark">课</span><span>智慧课堂综合平台</span></div><span class="role">{% block role %}{% endblock %}</span></header>
   <main>
     {% set teacher = request.path == '/teacher' %}{% include 'nav.html' %}
     <section class="page-heading centered"><h1 id="active-title">在线选座系统</h1><p id="active-class" class="class-subtitle"></p></section>
     {% block controls %}{% endblock %}
     <section class="room-card" aria-label="座位登记">
-      <div class="room-heading"><div><h2 id="class-title">座位登记</h2><p id="round-status">请稍候</p></div><div class="counts"><strong id="count">0</strong><span> / <span id="capacity">64</span> 人已登记</span></div></div>
-      <div class="room-toolbar"><div class="legend"><span><i class="dot available"></i>空位</span><span><i class="dot occupied"></i>已登记</span><span><i class="dot unavailable"></i>设备停用</span><span><i class="dot selected"></i>当前选择</span></div><span id="connection" class="connection" role="status">正在连接</span></div>
+      <div class="room-heading"><div><h2 id="class-title">座位登记</h2></div><div class="counts"><strong id="count">0</strong><span> / <span id="capacity">64</span> 人已登记</span></div></div>
+      <div class="room-toolbar"><div class="legend"><span><i class="dot available"></i>空位</span><span><i class="dot occupied"></i>已登记</span><span><i class="dot unavailable"></i>设备停用</span><span><i class="dot selected"></i>当前选择</span></div><div class="status-row"><span id="round-status" class="operation-status">请稍候</span><span id="connection" class="connection" role="status">状态：连接中</span></div></div>
       <p class="hint" id="hint">请按电脑或桌面座位号核对实际位置。</p>
-      <div class="room-scroll"><div id="seat-map" class="seat-map"></div><div class="podium">讲 台<span>请以座位号为准，核对自己实际所在位置</span></div></div>
+      <div class="room-scroll"><div id="seat-map" class="seat-map"></div><div class="podium">讲 台<span>请以座位号为准</span></div></div>
       <div class="room-footer"><span id="empty-summary">尚未开始登记</span><span>登记结果自动保存在教师机</span></div>
     </section>
     <p id="notice" class="notice" role="status" aria-live="polite"></p>
     {% block bottom %}{% endblock %}
-  </main>
+  <footer class="site-footer">开发者 Kong</footer></main>
   <div id="dialog" class="overlay" hidden>
     <section class="dialog" role="dialog" aria-modal="true" aria-labelledby="dialog-title">
       <button id="dialog-close" class="dialog-close" type="button" aria-label="关闭">×</button>

@@ -285,6 +285,14 @@ def create_app(data_dir=None, bootstrap_key=None):
         attendance.decide_move(request_id, body().get('approve'))
         return jsonify(ok=True)
 
+    @app.get('/api/v1/teacher/rollcall/current')
+    def current_draw_state():
+        return jsonify(rollcall.current())
+
+    @app.post('/api/v1/teacher/rollcall/current')
+    def current_draw():
+        return jsonify(rollcall.draw_current(body().get('context_id')))
+
     @app.post('/api/v1/teacher/rollcall/<lid>')
     def draw(lid):
         body()

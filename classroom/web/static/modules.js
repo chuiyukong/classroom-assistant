@@ -6,7 +6,7 @@
   var historyId = '', correctionId = '', correctionLesson = '', recycled = false, drawing = false, busy = false;
   var moduleConnected = false;
   var polling = false, selectedSeat = null, checkinLesson = null, serverOffset = 0, lastRequests = '';
-  var seatMap = el('attendance-map') ? new window.ClassroomSeatMap(el('attendance-map'), function(n){ if(!teacher){showCheckin(n);} }) : null;
+  var seatMap = el('attendance-map') ? new window.ClassroomSeatMap(el('attendance-map'), function(n){ if(!teacher){showCheckin(n);}else if(module==='attendance'){showCorrection(n);} }) : null;
   var labels = {pending:'未签到', present:'已到', late:'迟到', leave:'请假', absent:'缺勤', long_leave:'长期请假'};
   function el(id) { return document.getElementById(id); }
   function put(id, s) { if (el(id)) { el(id).textContent = s; } }
@@ -21,7 +21,7 @@
   }
   function save(path, data, method, cb) {
     if (busy) { return; } busy = true;
-    api(method || 'POST', path, data, function (err, d) { busy = false; message(err || '已保存'); if (!err && cb) { cb(d); } refresh(); });
+    api(method || 'POST', path, data, function (err, d) { busy = false; message(err || '已保存'); if(el('correction-error')){put('correction-error',err||'');} if (!err && cb) { cb(d); } refresh(); });
   }
   function time(s) { return s ? new Date(s).toLocaleString() : ''; }
   var links = document.querySelectorAll('.module-nav a');
@@ -29,7 +29,7 @@
   function map(entries) {
     if (!seatMap || !state) { return; }
     seatMap.layout(state.layout);
-    seatMap.update(entries, {disabled:state.disabled_seats || [], teacher:teacher, rollcall:module==='rollcall', attendance:!!(state.lesson && state.lesson.attendance_started_at), blocked:teacher || !canCheckin()});
+    seatMap.update(entries, {disabled:state.disabled_seats || [], teacher:teacher, rollcall:module==='rollcall', attendance:state.source==='attendance' || !!(state.lesson && state.lesson.attendance_started_at), blocked:teacher ? !(state.is_current && state.lesson && state.lesson.attendance_started_at) : !canCheckin()});
   }
   function canCheckin() {
     var l=state && state.lesson;
@@ -39,10 +39,11 @@
     if(!el('countdown')) { return; }
     var l=state && state.lesson;
     if(!l || !l.attendance_started_at){put('countdown','签到未开放');el('countdown').className='operation-status is-closed';return;}
+    if(!teacher && state.my_student_id){put('countdown','已签到');el('countdown').className='operation-status is-open';return;}
     var seconds=l.attendance_deadline ? Math.ceil((new Date(l.attendance_deadline).getTime()-Date.now()-serverOffset)/1000) : null;
     var late=seconds!==null && seconds<=0, span=Math.abs(seconds||0);
     var clock=('0'+Math.floor(span/60)).slice(-2)+':'+('0'+span%60).slice(-2);
-    put('countdown',l.attendance_closed_at ? '签到已结束' : (late ? '迟到签到开放 · 已超时 '+clock : (seconds===null ? '签到开放中' : '签到开放中 · 签到剩余 '+clock)));
+    put('countdown',l.attendance_closed_at ? '签到已结束' : (late ? '签到超时：'+clock : (seconds===null ? '签到开放中' : '签到剩余 '+clock)));
     el('countdown').className='operation-status '+(l.attendance_closed_at?'is-closed':(late?'is-late':'is-open'));
 
   }
@@ -58,16 +59,30 @@
     var matches=(state.entries||[]).filter(function(r){return r.name.replace(/\s/g,'').toLowerCase()===typed;});
     el('move-reasons').hidden=!(matches.length===1 && matches[0].original_seat!==selectedSeat);
   }
+  function showCorrection(number) {
+    if(!state || !state.lesson || !state.is_current || !state.lesson.attendance_started_at){return;}
+    correctionLesson=state.lesson.id;
+    var actual=state.entries.filter(function(r){return r.seat_no===number;}),fixed=state.entries.filter(function(r){return r.original_seat===number;});
+    var r=actual[0]||fixed[0]||state.entries[0];if(!r){return;}
+    var select=el('correction-student');select.textContent='';
+    state.entries.forEach(function(item){var o=make('option',item.name+' · '+item.original_seat+'号');o.value=item.student_id;select.appendChild(o);});
+    select.value=r.student_id;loadCorrection();el('correction-seat').value=number;
+    put('correction-error','');put('correction-name',number+'号 · 考勤纠正');el('correction-panel').hidden=false;select.focus();
+  }
+  function loadCorrection(){
+    var r=state.entries.filter(function(item){return item.student_id===el('correction-student').value;})[0];if(!r){return;}
+    correctionId=r.student_id;el('correction-status').value=r.status==='late'?'present':r.status;el('correction-seat').value=r.seat_no||r.original_seat;
+    put('correction-detail',labels[r.status]+(r.late_seconds?' · 迟到 '+r.late_seconds+' 秒':''));
+  }
   function render(d) {
     var previous = state && state.lesson ? state.lesson.id : null;
     state = d; var l = d.lesson, live = !!(l && d.is_current);
     if(d.server_time){serverOffset=new Date(d.server_time).getTime()-Date.now();}
     if(!teacher && checkinLesson && (!l || l.id!==checkinLesson)){closeCheckin();}
     if(teacher && module==='rollcall'){
-      put('lesson-info', l ? l.class_name + ' · 本节课堂' : '请先开始本节课');
-      el('draw-button').disabled=!live || drawing;
-      put('draw-source',l && l.attendance_started_at ? '仅点名已签到学生' : '使用座位名单');
-      if(previous!==(l?l.id:null)){seatMap.highlight(null);put('draw-name','准备点名');put('draw-history','');}
+      el('draw-button').disabled=!d.candidate_count || drawing;
+      put('draw-source',(d.source==='attendance'?'已签到名单':'当前座位名单')+' · '+d.candidate_count+' 人'+(d.candidate_count===1?'（仅一人可选）':''));
+      if(seatMap.contextId!==d.context_id){seatMap.contextId=d.context_id;seatMap.highlight(null);put('draw-name','准备点名');}
       map(d.entries||[]);return;
     }
     countdown();
@@ -83,12 +98,7 @@
       }
       put('missing-names', l && l.attendance_started_at ? '尚未到场：' + (d.entries.filter(function (r) { return r.status !== 'present' && r.status !== 'late'; }).map(function (r) { return r.name + '（' + labels[r.status] + '）'; }).join('、') || '全部到齐') : '尚未开展考勤');
       el('attendance-export').hidden = !l; if (l) { el('attendance-export').href = '/api/v1/teacher/lessons/' + l.id + '/export'; }
-      var rows = el('attendance-rows'); rows.textContent = '';
-      (d.entries || []).forEach(function (r) {
-        var tr = make('tr'); [r.name, r.original_seat + ' → ' + (r.seat_no || '—'), l && l.attendance_started_at ? labels[r.status] : '未开展', r.late_seconds ? Math.ceil(r.late_seconds / 60) + ' 分钟' : '—'].forEach(function (s) { tr.appendChild(make('td', s)); });
-        var td = make('td'), b = make('button', '纠正 / 补签', 'secondary'); b.disabled = !live || !l.attendance_started_at;
-        b.onclick = function () { correctionId = r.student_id; correctionLesson = l.id; put('correction-name', r.name + ' · 原座位 ' + r.original_seat); el('correction-status').value = r.status === 'late' ? 'present' : r.status; el('correction-seat').value = r.seat_no || r.original_seat; el('correction-panel').hidden = false; el('correction-panel').scrollIntoView(); }; td.appendChild(b); tr.appendChild(td); rows.appendChild(tr);
-      }); map(d.entries || []);
+      map(d.entries || []);
       var signature=JSON.stringify(d.change_requests||[])+live;
       if(signature!==lastRequests){lastRequests=signature;el('change-requests').textContent='';
         (d.change_requests||[]).forEach(function(q){var row=make('div','','change-request');row.appendChild(make('span',q.name+' · '+q.from_seat+' → '+q.to_seat+' · '+({pending:'待审批',approved:'已同意',rejected:'已拒绝',cancelled:'已取消'}[q.status])));
@@ -104,7 +114,7 @@
     if (module === 'data' || polling) { return; }
     polling = true;
     var requested = historyId;
-    api('GET', teacher ? (historyId ? 'teacher/lessons/' + historyId : 'teacher/lessons/current') : 'student/attendance', null, function (err, d) {
+    api('GET', teacher ? (module==='rollcall' ? 'teacher/rollcall/current' : historyId ? 'teacher/lessons/' + historyId : 'teacher/lessons/current') : 'student/attendance', null, function (err, d) {
       polling = false; moduleConnected=!err;
       if (requested !== historyId) { return; }
       put('module-connection', err ? '状态：连接中断' : '状态：已连接');
@@ -117,7 +127,7 @@
   }
   function context() {
     api('GET', teacher ? 'teacher/current' : 'student/state', null, function (err, d) {
-      if (!err) { arrangement = d; put('active-class',d['class'] ? d['class'].name : '未选择上课班级'); if(!teacher){el('seating-nav').hidden=!(d.round && d.round.is_open);} }
+      if (!err) { arrangement = d; put('active-class',d['class'] ? d['class'].name : '未选择上课班级'); if(!teacher){el('seating-nav').hidden=!(d.round && d.round.is_open);if(d.round && d.round.is_open){window.location.replace('/');}} }
     });
   }
   if (module === 'data') {
@@ -137,13 +147,17 @@
     classes(); context(); return;
   }
   if (teacher) {
-    el('new-lesson').onclick = function () {
+    if(el('new-lesson')){el('new-lesson').onclick = function () {
       if (!arrangement || !arrangement.round) { message('请先在在线选座中选择上课班级并完成登记'); return; }
       if (!confirm('开始新的一节课？上一节日志将转为只读，本节使用当前座位名单，不沿用上一节签到。')) { return; }
       save('teacher/lessons', {round_id: arrangement.round.id, late_after: 5}, 'POST', function () { historyId = ''; put('draw-name','准备点名'); put('draw-history',''); });
     };
+    }
     [['open-attendance','open'],['close-attendance','close'],['end-lesson','end']].forEach(function (pair) { if(!el(pair[0])){return;} el(pair[0]).onclick = function () { if (!state || !state.lesson) { return; } if (pair[1] !== 'open' && !confirm('确认结束？未签到人员会记为缺勤；结束本节课后日志只读。')) { return; } save('teacher/lessons/' + state.lesson.id + '/' + pair[1], pair[1]==='open' ? {duration_minutes:Number(el('attendance-duration').value)} : {}); }; });
     if (module === 'attendance') {
+      el('correction-close').onclick=function(){el('correction-panel').hidden=true;};
+      el('correction-student').onchange=loadCorrection;
+      document.addEventListener('keydown',function(e){if(el('correction-panel').hidden){return;}if(e.keyCode===27){el('correction-panel').hidden=true;}if(e.keyCode===9){var nodes=Array.prototype.filter.call(el('correction-panel').querySelectorAll('select,input,button'),function(n){return !n.disabled && n.offsetParent!==null;});var index=nodes.indexOf(document.activeElement);e.preventDefault();nodes[(index+(e.shiftKey?-1:1)+nodes.length)%nodes.length].focus();}});
       el('correction-form').onsubmit = function (e) { e.preventDefault(); if (!correctionId) { return; } save('teacher/lessons/' + correctionLesson + '/students/' + correctionId, {status:el('correction-status').value, seat_no:Number(el('correction-seat').value)}, 'PUT', function () { el('correction-panel').hidden = true; }); };
       api('GET','teacher/classes',null,function(err,d){ if (!err) { d.classes.forEach(function(c){var o=make('option',c.name);o.value=c.id;el('history-class').appendChild(o);}); } });
       el('history-search').onclick = function () {
@@ -154,14 +168,14 @@
       el('history-current').onclick = function () { historyId = ''; refresh(); };
     } else {
       el('draw-button').onclick = function () {
-        if(drawing || !state || !state.lesson){return;} drawing=true;el('draw-button').disabled=true;
-        var lid=state.lesson.id, entries=state.entries.filter(function(r){return !state.lesson.attendance_started_at || r.status==='present' || r.status==='late';});
+        if(drawing || !state || !state.candidate_count){return;} drawing=true;el('draw-button').disabled=true;
+        var contextId=state.context_id, entries=state.candidates;
         var reduced=window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-        function flash(){if(!entries.length){return;}var r=entries[Math.floor(Math.random()*entries.length)];seatMap.highlight(state.lesson.attendance_started_at?r.seat_no:r.original_seat);put('draw-name',r.name);}
+        function flash(){if(!entries.length){return;}var r=entries[Math.floor(Math.random()*entries.length)];seatMap.highlight(r.seat_no);put('draw-name',r.name);}
         var animation=reduced?null:setInterval(flash,110);
-        api('POST','teacher/rollcall/'+lid,{},function(err,d){setTimeout(function(){clearInterval(animation);drawing=false;
-          if(!state.lesson || state.lesson.id!==lid){seatMap.highlight(null);put('draw-name','课堂已切换');refresh();return;}
-          if(err){message(err);put('draw-name','未抽取');seatMap.highlight(null);}else{put('draw-name',d.name);seatMap.highlight(d.seat_no);api('GET','teacher/rollcall/'+lid,null,function(e,result){if(!e){put('draw-history','本节已点名：'+result.draws.map(function(r){return r.name;}).join('、'));}});}refresh();},reduced?0:1200);});
+        api('POST','teacher/rollcall/current',{context_id:contextId},function(err,d){setTimeout(function(){clearInterval(animation);drawing=false;
+          if(state.context_id!==contextId){seatMap.highlight(null);put('draw-name','名单已切换');refresh();return;}
+          if(err){message(err);put('draw-name','未抽取');seatMap.highlight(null);}else{put('draw-name',d.name);seatMap.highlight(d.seat_no);}refresh();},reduced?0:900);});
       };
     }
   } else {

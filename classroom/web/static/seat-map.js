@@ -15,7 +15,7 @@
         if(!seats.length){continue;}
         if(seats[0].group!==last){last=seats[0].group;block.appendChild(make('div','group-label',last));}
         var line=make('div','seat-row');
-        seats.forEach(function(s){var btn=make('button','seat attendance-seat');btn.type='button';btn.setAttribute('data-seat',s.number);btn.appendChild(make('span','number',String(s.number)));var content=make('span','seat-content');content.appendChild(make('strong','name','空座位'));content.appendChild(make('span','seat-status',''));btn.appendChild(content);btn.onclick=function(){if(self.click){self.click(s.number);}};self.buttons[s.number]=btn;line.appendChild(btn);});
+        seats.forEach(function(s){var btn=make('button','seat attendance-seat');btn.type='button';btn.setAttribute('data-seat',s.number);btn.appendChild(make('span','number',String(s.number)));var content=make('span','seat-content');content.appendChild(make('strong','name','空位'));content.appendChild(make('span','seat-status',''));btn.appendChild(content);btn.onclick=function(){if(self.click){self.click(s.number);}};self.buttons[s.number]=btn;line.appendChild(btn);});
         block.appendChild(line);
       }
       block.appendChild(make('div','big-group-title',['第一大组','第二大组','第三大组','第四大组'][b-1]));this.root.appendChild(block);
@@ -28,16 +28,16 @@
     for(var number in this.buttons){if(Object.prototype.hasOwnProperty.call(this.buttons,number)){
       var n=Number(number),btn=this.buttons[n],r=actual[n]||fixed[n],signed=!!actual[n],moved=r&&r.seat_no&&r.seat_no!==n;
       if(options.rollcall && moved){r=null;}
-      var state=signed?'present':(moved?'moved':'pending'),off=disabled.indexOf(n)!==-1;
+      var state=signed?'present':(moved?'moved':(r?'pending':'empty')),off=disabled.indexOf(n)!==-1;
       var status=off?'设备停用':(signed?'已签到':(moved?'已换座':(r?'未签到':'')));
-      if(options.teacher && r && r.status && !moved){status=labels[r.status];state=r.status;}
-      if(options.rollcall && !options.attendance){status=off?'设备停用':'';state='pending';}
+      if(r && r.status && !moved){status=labels[r.status];state=r.status;}
+      if(options.rollcall && !options.attendance){status=off?'设备停用':'';state=r?'taken':'empty';}
       if(options.rollcall && options.attendance && r && !signed){state='absent';status='未签到';}
       btn.className='seat attendance-seat '+state+(off?' unavailable':'')+(this.highlighted===n?' draw-highlight':'');
-      btn.querySelector('.name').textContent=r?r.name:'空座位';btn.querySelector('.seat-status').textContent=status;
-      btn.disabled=!!options.blocked||off||signed||!!options.rollcall;
-      btn.setAttribute('aria-label',n+'号 '+(r?r.name:'空座位')+' '+status);
-      btn.title=n+'号 '+(r?r.name:'空座位')+' '+status;
+      btn.querySelector('.name').textContent=r?r.name:'空位';btn.querySelector('.seat-status').textContent=status;
+      btn.disabled=!!options.blocked||!!options.rollcall||(!options.teacher && (off||signed));
+      btn.setAttribute('aria-label',n+'号 '+(r?r.name:'空位')+' '+status);
+      btn.title=n+'号 '+(r?r.name:'空位')+' '+status;
     }}
   };
   SeatMap.prototype.highlight=function(number){var old=this.buttons[this.highlighted];if(old){old.className=old.className.replace(' draw-highlight','');}this.highlighted=number;var next=this.buttons[number];if(next){next.className+=' draw-highlight';}};

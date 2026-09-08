@@ -38,7 +38,7 @@ class InstanceLock:
             msvcrt.locking(self.handle.fileno(), msvcrt.LK_NBLCK, 1)
         except OSError:
             self.handle.close()
-            raise RuntimeError("课堂助手已在运行，请使用已有的启动窗口。")
+            raise RuntimeError("智慧课堂综合平台已在运行，请使用已有的启动窗口。")
 
     def close(self):
         import msvcrt
@@ -48,7 +48,7 @@ class InstanceLock:
 
 
 def main():
-    parser = argparse.ArgumentParser(description="课堂助手")
+    parser = argparse.ArgumentParser(description="智慧课堂综合平台")
     parser.add_argument("--data-dir", type=Path)
     parser.add_argument("--port", type=int)
     parser.add_argument("--headless", action="store_true")
@@ -88,7 +88,7 @@ def main():
         from tkinter import messagebox
         window = tk.Tk()
         window.withdraw()
-        messagebox.showerror("课堂助手无法启动", str(error), parent=window)
+        messagebox.showerror("智慧课堂综合平台无法启动", str(error), parent=window)
         window.destroy()
     finally:
         if server:
@@ -102,14 +102,14 @@ def show_window(root, urls, admin, no_browser):
     import tkinter as tk
     from tkinter import messagebox
     win = tk.Tk()
-    win.title("课堂助手 v" + VERSION + " · 教师机")
+    win.title("智慧课堂综合平台 v" + VERSION + " · 教师机")
     win.geometry("650x445")
     win.minsize(620, 420)
     win.configure(bg="#f1f4f6")
     font = ("Microsoft YaHei", 10)
     frame = tk.Frame(win, bg="#f1f4f6", padx=28, pady=22)
     frame.pack(fill="both", expand=True)
-    tk.Label(frame, text="课堂助手正在运行", font=("Microsoft YaHei", 20, "bold"), bg="#f1f4f6", fg="#176d61").pack(anchor="w")
+    tk.Label(frame, text="智慧课堂综合平台正在运行", font=("Microsoft YaHei", 20, "bold"), bg="#f1f4f6", fg="#176d61").pack(anchor="w")
     tk.Label(frame, text="1. 打开教师管理，选择班级并开始登记。\n2. 通过极域统一打开下方学生网址。\n3. 登记结束后，在教师管理中导出 Excel。", justify="left", font=font, bg="#f1f4f6", pady=14).pack(anchor="w")
     tk.Button(frame, text="打开教师管理", command=lambda: webbrowser.open(admin), bg="#176d61", fg="white", font=font, padx=20, pady=8, relief="flat").pack(anchor="w")
     tk.Label(frame, text="学生访问网址（多个地址时，请先从一台学生机测试）", font=font, bg="#f1f4f6", pady=9).pack(anchor="w")
@@ -126,7 +126,7 @@ def show_window(root, urls, admin, no_browser):
     tk.Button(controls, text="打开数据目录", font=font, command=lambda: os.startfile(root)).pack(side="left")
     tk.Label(frame, text="上课期间请保留此窗口，可最小化。关闭窗口会停止学生访问。\n数据保存在本机，升级程序不会覆盖。", justify="left", font=("Microsoft YaHei", 9), bg="#f1f4f6", fg="#657985").pack(anchor="w", pady=8)
     def stop():
-        if messagebox.askyesno("停止课堂助手", "关闭后学生将无法继续登记，已有数据保留。确认关闭？", parent=win):
+        if messagebox.askyesno("停止智慧课堂综合平台", "关闭后学生将无法继续登记，已有数据保留。确认关闭？", parent=win):
             win.destroy()
     win.protocol("WM_DELETE_WINDOW", stop)
     if not no_browser:

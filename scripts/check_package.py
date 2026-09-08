@@ -96,6 +96,11 @@ def run():
             assert request('/api/v1/teacher/info')['version'] == VERSION
             assert b'modules.js' in request('/teacher/attendance', raw=True)
             request('/api/v1/teacher/rounds/' + current['round']['id'] + '/close', 'POST', {})
+            independent=request('/api/v1/teacher/rollcall/current')
+            assert independent['source']=='seating' and independent['candidate_count']==1
+            assert request('/api/v1/teacher/rollcall/current','POST',{'context_id':independent['context_id']})['name']=='测试同学'
+            assert request('/api/v1/teacher/lessons/current')['lesson'] is None
+            assert '智慧课堂综合平台'.encode() in request('/attendance',raw=True)
             lesson = request('/api/v1/teacher/lessons', 'POST', {'round_id': current['round']['id']})
             lid = lesson['lesson']['id']
             assert request('/api/v1/teacher/rollcall/' + lid, 'POST', {})['source'] == 'seating'
