@@ -36,10 +36,10 @@ def run():
                 assert teacher.locator('#class-year option').first.get_attribute('value')==str(datetime.now().year+10)
                 assert teacher.locator('#student-notes').count()==0
                 teacher.locator('.footnote').evaluate("e=>e.style.visibility='hidden'")
-                teacher.screenshot(path='test-results/teacher-v170.png',full_page=True)
+                teacher.screenshot(path='test-results/teacher-v180.png',full_page=True)
                 teacher.get_by_role('link',name='随机点名',exact=True).click()
                 assert teacher.locator('#new-lesson').count()==0
-                expect(teacher.locator('#draw-source')).to_contain_text('当前座位名单 · 50 人')
+                expect(teacher.locator('#draw-source')).to_contain_text('点名范围人数 · 50 人')
                 teacher.evaluate("() => {window.visited=[];var original=ClassroomSeatMap.prototype.highlight;ClassroomSeatMap.prototype.highlight=function(n){if(n){window.visited.push(n);}return original.call(this,n);};}")
                 teacher.locator('#draw-button').click();expect(teacher.locator('#draw-button')).to_be_enabled()
                 assert len(set(teacher.evaluate('window.visited.slice(0,50)')))==50
@@ -61,7 +61,7 @@ def run():
                 expect(b.locator('[data-seat="3"]')).to_contain_text('长期请假')
                 expect(b.locator('[data-seat="2"] .name')).to_have_text('春风化雨')
                 assert b.locator('[data-seat="2"] .name').evaluate('e=>e.scrollWidth<=e.clientWidth')
-                b.screenshot(path='test-results/student-v170.png',full_page=True)
+                b.screenshot(path='test-results/student-v180.png',full_page=True)
                 b.locator('[data-seat="2"]').click();b.locator('#checkin-name').fill('春风化雨');handle=b.locator('#checkin-name').element_handle()
                 expect(b.locator('#countdown')).to_contain_text('签到超时：',timeout=65000)
                 expect(a.locator('#countdown')).to_have_text('已签到')
@@ -69,10 +69,10 @@ def run():
                 expect(b.locator('#checkin-name')).to_have_value('春风化雨')
                 b.locator('#checkin-button').click();expect(b.locator('#countdown')).to_have_text('已签到')
                 expect(teacher.locator('[data-seat="2"]')).to_have_class(re.compile('late'))
-                teacher.screenshot(path='test-results/attendance-v170.png',full_page=True)
+                teacher.screenshot(path='test-results/attendance-v180.png',full_page=True)
                 podium=teacher.locator('.attendance-main .podium').bounding_box();assert podium['y']+podium['height']<=1080
                 assert teacher.locator('.attendance-sidebar').bounding_box()['x']>teacher.locator('.attendance-main').bounding_box()['x']+teacher.locator('.attendance-main').bounding_box()['width']-1
-                teacher.get_by_role('link',name='随机点名',exact=True).click();expect(teacher.locator('#draw-source')).to_contain_text('已签到名单 · 2 人')
+                teacher.get_by_role('link',name='随机点名',exact=True).click();expect(teacher.locator('#draw-source')).to_contain_text('点名范围人数 · 2 人')
                 teacher.locator('#draw-scope').select_option('late');expect(teacher.locator('#draw-source')).to_contain_text('1 人')
                 teacher.locator('#draw-button').click();expect(teacher.locator('#draw-name')).to_have_text('春风化雨');expect(teacher.locator('#draw-button')).to_be_enabled()
                 expect(b.locator('.rollcall-popup')).to_be_visible();expect(b.locator('.rollcall-popup strong')).to_have_text('春风化雨');expect(a.locator('.rollcall-popup')).to_be_hidden();expect(b.locator('.rollcall-popup')).to_be_hidden(timeout=6500)
@@ -84,7 +84,7 @@ def run():
                 for _ in range(5):
                     teacher.locator('#draw-button').click();expect(teacher.locator('#draw-button')).to_be_enabled()
                     name=teacher.locator('#draw-name').inner_text();assert name in ('张同学甲','春风化雨') and name!=previous;previous=name
-                teacher.set_viewport_size({'width':1366,'height':768});teacher.screenshot(path='test-results/rollcall-v170.png',full_page=True)
+                teacher.set_viewport_size({'width':1366,'height':768});teacher.screenshot(path='test-results/rollcall-v180.png',full_page=True)
                 podium=teacher.locator('.podium').bounding_box();assert podium['y']+podium['height']<=768
                 teacher.set_viewport_size({'width':1920,'height':1080});teacher.get_by_role('link',name='考勤签到',exact=True).click()
                 teacher.locator('#close-attendance').click();expect(teacher.locator('#countdown')).to_have_text('签到已结束')
@@ -104,7 +104,7 @@ def run():
                 expect(teacher.locator('#log-lesson option')).to_have_count(2);teacher.locator('#log-lesson').select_option(index=1)
                 expect(teacher.locator('#log-times')).to_contain_text('下课：');
                 expect(teacher.locator('#log-map [data-seat="63"]')).to_have_attribute('title',re.compile('10.0.0.63'));teacher.locator('#log-map [data-seat="63"]').click();expect(teacher.locator('#log-student-detail')).to_contain_text('10.0.0.1')
-                teacher.locator('#teaching-log-tab').click();expect(teacher.locator('#log-help')).to_contain_text('尚未采集');teacher.locator('#attendance-log-tab').click();teacher.screenshot(path='test-results/data-v170.png',full_page=True);
+                teacher.locator('#teaching-log-tab').click();expect(teacher.locator('#log-help')).to_contain_text('尚未采集');teacher.locator('#attendance-log-tab').click();teacher.screenshot(path='test-results/data-v180.png',full_page=True);
                 expect(teacher.locator('#log-map [data-seat="3"]')).to_contain_text('已签到')
                 teacher.goto(url+'/teacher');teacher.locator('#start-round').click();expect(a).to_have_url(url+'/');expect(b).to_have_url(url+'/')
                 expect(a.locator('#round-status')).to_contain_text('开放中')
@@ -113,7 +113,7 @@ def run():
                 teacher.locator('#class-list input[type=checkbox]').check();teacher.locator('#manage-selected').click();expect(teacher.locator('#class-list input[type=checkbox]')).to_have_count(0)
                 teacher.locator('#show-deleted').click();teacher.locator('#class-list input[type=checkbox]').check();teacher.locator('#manage-selected').click();expect(teacher.locator('#class-list input[type=checkbox]')).to_have_count(0)
                 assert not errors,errors
-                browser.close();print('v1.7 browser passed: independent draws, one-minute deadline, signed status, modal correction, long leave, four-character fit, sidebar, automatic routing, recycle.')
+                browser.close();print('v1.8 browser passed: independent draws, one-minute deadline, signed status, modal correction, long leave, four-character fit, sidebar, automatic routing, recycle.')
         finally:
             server.close()
             for handler in list(app.logger.handlers):

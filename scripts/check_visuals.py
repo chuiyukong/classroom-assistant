@@ -47,7 +47,7 @@ def run():
                     assert 60<=long.bounding_box()['width']<75
                 check_style(teacher);check_style(student)
                 teacher.locator('.footnote').evaluate("e=>e.style.visibility='hidden'")
-                teacher.screenshot(path='test-results/teacher-v170.png',full_page=True)
+                teacher.screenshot(path='test-results/teacher-v180.png',full_page=True)
                 seating.close_round(rid);lesson=attendance.start(rid);lid=lesson['lesson']['id'];rows=lesson['entries']
                 attendance.action(lid,'open')
                 for n,row in enumerate(rows[:35],1):attendance.checkin(lid,row['student_id'],n,'10.9.0.'+str(n),'visual-'+str(n))
@@ -62,12 +62,12 @@ def run():
                 assert student.locator('.seat-status').first.evaluate('e=>getComputedStyle(e).fontSize')=='12px'
                 assert student.locator('[data-seat="42"]').evaluate('e=>getComputedStyle(e).backgroundColor')=='rgb(234, 240, 245)'
                 assert student.locator('[data-seat="36"]').evaluate('e=>getComputedStyle(e).backgroundColor')==student.locator('[data-seat="1"]').evaluate('e=>getComputedStyle(e).backgroundColor')
-                teacher.screenshot(path='test-results/attendance-v170.png',full_page=True);student.screenshot(path='test-results/student-v170.png',full_page=True)
+                teacher.screenshot(path='test-results/attendance-v180.png',full_page=True);student.screenshot(path='test-results/student-v180.png',full_page=True)
                 podium=teacher.locator('.attendance-main .podium').bounding_box();assert podium['y']+podium['height']<=1080
                 teacher.goto(url+'/teacher/rollcall');teacher.set_viewport_size({'width':1366,'height':768})
                 check_style(teacher);expect(teacher.locator('#draw-source')).to_contain_text('39 人')
-                podium=teacher.locator('.podium').bounding_box();assert podium['y']+podium['height']<=768
-                teacher.screenshot(path='test-results/rollcall-v170.png',full_page=True)
+                podium=teacher.locator('.podium').bounding_box();assert podium['y']+podium['height']<=768, podium
+                teacher.screenshot(path='test-results/rollcall-v180.png',full_page=True)
                 attendance.action(lid,'end');teacher.set_viewport_size({'width':1920,'height':1080});teacher.goto(url+'/teacher/data')
                 expect(teacher.locator('#log-graduation option')).to_have_count(2)
                 teacher.locator('#log-graduation').select_option('2029');teacher.locator('#log-search').click();expect(teacher.locator('#log-lesson option')).to_have_count(2)
@@ -77,7 +77,7 @@ def run():
                     teacher.locator('#export-classes').click()
                 text=Path(download.value.path()).read_text(encoding='utf-8-sig')
                 assert '签到设备及纠正记录' in text and '2029' in text
-                teacher.screenshot(path='test-results/data-v170.png',full_page=True)
+                teacher.screenshot(path='test-results/data-v180.png',full_page=True)
                 assert not errors,errors
                 browser.close()
                 print('50-student visual checks passed: 15px regular names / 12px status, full-card state colors, inset dividers, state colors, compact maps, grade log filters, all pages.')

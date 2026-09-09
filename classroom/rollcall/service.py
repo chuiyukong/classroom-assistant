@@ -29,7 +29,7 @@ class RollCallService:
             context = 'attendance:' + lesson['id']
         else:
             source = 'seating'
-            entries = [dict(student_id=r['student_id'],name=r['name'],original_seat=r['seat_no'],seat_no=None) for r in arrangement['registrations']]
+            entries = [dict(student_id=r['student_id'],name=r['name'],original_seat=r['seat_no'],seat_no=None,role=r.get('role',0)) for r in arrangement['registrations']]
             candidates = [dict(student_id=r['student_id'],name=r['name'],seat_no=r['original_seat']) for r in entries]
             context = 'seating:' + (arrangement['round']['id'] if arrangement['round'] else '')
             data['layout'] = arrangement['layout']

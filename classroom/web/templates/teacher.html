@@ -15,7 +15,7 @@
 {% block student_fields %}
 <label for="student-record">已有学生记录</label><select id="student-record"><option value="">按姓名匹配已有记录</option></select>
 <label class="checkbox-label"><input id="new-identity" type="checkbox">同名新学生（另建独立学生记录）</label>
-<label for="student-note">学生备注 · 仅教师可见</label><textarea id="student-note" maxlength="1000" rows="2" placeholder="备注跟随学生，不属于设备"></textarea>
+<div class="student-roles"><label class="checkbox-label"><input id="role-monitor" type="checkbox">班长</label><label class="checkbox-label"><input id="role-representative" type="checkbox">课代表</label></div><label for="student-note">学生备注 · 仅教师可见</label><textarea id="student-note" maxlength="1000" rows="2" placeholder="备注跟随学生，不属于设备"></textarea>
 {% endblock %}
 {% block device_fields %}
 <form id="device-form" class="device-form"><h3>设备配置 · 所有班级共用</h3><label class="checkbox-label"><input id="seat-disabled" type="checkbox">设备停用，学生不可选择</label><label for="device-note">设备备注 · 仅教师可见</label><textarea id="device-note" maxlength="1000" rows="2" placeholder="例如：鼠标故障，等待维修"></textarea><button id="device-save" type="submit" class="secondary">保存设备配置</button><p id="device-message" role="status"></p></form>

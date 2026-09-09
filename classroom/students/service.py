@@ -26,7 +26,8 @@ class StudentService:
         with self.database.connect() as db:
             if not db.execute('SELECT 1 FROM classes WHERE id=?', (class_id,)).fetchone():
                 raise AppError('班级不存在', 404)
-            return [dict(r) for r in db.execute('SELECT * FROM students WHERE class_id=? ORDER BY name_key, created_at, id', (class_id,))]
+            roles = self.roles(db)
+            return [dict(dict(r),role=roles.get(r['id'],0)) for r in db.execute('SELECT * FROM students WHERE class_id=? ORDER BY name_key, created_at, id', (class_id,))]
 
     def update_note(self, student_id, note):
         note = clean_note(note)
@@ -72,6 +73,17 @@ class StudentService:
         db.execute('INSERT INTO students VALUES (?, ?, ?, ?, ?, ?, ?)', (sid, class_id, name, key, '', timestamp(), timestamp()))
         return sid
 
+    @staticmethod
+    def roles(db):
+        return {r['student_id']:r['role'] for r in db.execute('SELECT student_id,role FROM student_roles')}
+
+    @staticmethod
+    def set_role(db, student_id, role):
+        if type(role) is not int or role not in range(4):
+            raise AppError('学生职务标记无效')
+        db.execute('INSERT INTO student_roles(student_id,role) VALUES (?,?) ON CONFLICT(student_id) DO UPDATE SET role=excluded.role', (student_id,role))
+
     def export_data(self,db,ids):
         marks=','.join('?' for _ in ids)
-        return {'students':[dict(r) for r in db.execute('SELECT * FROM students WHERE class_id IN ('+marks+')',ids)]}
+        roles = self.roles(db)
+        return {'students':[dict(dict(r),role=roles.get(r['id'],0)) for r in db.execute('SELECT * FROM students WHERE class_id IN ('+marks+')',ids)]}

@@ -43,7 +43,7 @@ main{max-width:1820px;margin:auto;padding:14px 24px}.module-nav{display:flex;fle
 .seat.long_leave,.seat.leave,.seat-legend .long_leave{background:#f3eddf;color:#88723e;border-color:#e2d5b9}.seat.absent{background:#f4e6e9;color:#956578;border-color:#dfc4cf}
 .seat.unavailable,.dot.unavailable{background:#e7ebee;color:#84919a;border-color:#d0d8de}.seat.chosen,.dot.selected{background:#39776f;color:white}.seat.chosen .number{color:#d5e8e3}
 .seat-legend{margin:6px 18px}.seat-legend>span{padding:1px 8px;border-radius:4px;margin-bottom:3px}
-.big-group-title{text-align:center;padding:4px 0 0;font-size:16px;color:#647e8b}.podium{margin:7px auto 0;width:280px;background:#dfe8ed;border:1px solid #c4d3dd;border-radius:6px;padding:3px 14px;text-align:center;font-weight:600;color:#4b6677;letter-spacing:4px}.podium span{display:block;font-size:16px;font-weight:400;letter-spacing:0}
+.big-group-title{text-align:center;padding:4px 0 0;font-size:16px;color:#647e8b}.podium{margin:7px auto 0;width:280px;background:#dfe8ed;border:1px solid #c4d3dd;border-radius:6px;padding:4px 14px;text-align:center;font-weight:600;color:#4b6677;letter-spacing:4px}.podium span{display:block;font-size:16px;font-weight:400;letter-spacing:0}
 .room-footer{display:flex;justify-content:space-between;border-top:1px solid #e7edf1;padding:8px 18px;color:#738792;font-size:16px}.footnote{font-size:16px;color:#718792;margin:8px 0}#data-location{display:block}
 .notice{margin:8px 0;color:#39776f;font-size:16px}.notice:empty{display:none}.error,.notice.error,.danger{color:#a36460}.error{min-height:22px}
 .overlay{position:fixed;inset:0;top:0;right:0;bottom:0;left:0;background:rgba(33,52,65,.30);display:flex;align-items:center;justify-content:center;z-index:20;padding:18px}
@@ -111,3 +111,14 @@ body[data-module="attendance"] .group-label{margin:0;line-height:18px}body[data-
 @media(max-width:700px){.rollcall-popup strong{font-size:48px}}
 
 .management-row #class-graduation{width:190px}
+
+/* Small public role badges never change seat/name dimensions. */
+.seat .role-badge{position:absolute;right:3px;top:0;font-size:7px;line-height:7px;font-weight:400;max-width:64px;white-space:nowrap;pointer-events:none;color:#496678;letter-spacing:0}
+#new-lesson.is-teaching:disabled{background:#dcecff;border-color:#9dbde2;color:#245a92;opacity:1;cursor:not-allowed}
+
+.seat.has-role .seat-content{align-self:stretch;display:flex;flex-direction:column;justify-content:flex-end;padding-bottom:0}
+.seat.has-role .seat-content .name{padding-top:0;line-height:17px;flex:0 0 17px}
+.seat.has-role .seat-status{line-height:12px}
+@media(max-height:850px){body[data-module="rollcall"] .draw-panel{padding-top:4px;padding-bottom:4px}body[data-module="rollcall"] #draw-name{margin-top:0;margin-bottom:0;min-height:34px;font-size:28px}body[data-module="rollcall"] .room-scroll{padding-top:3px;padding-bottom:3px}}
+
+@media(max-height:850px){body[data-module="rollcall"] .seat.has-role .seat-status{line-height:10px}}

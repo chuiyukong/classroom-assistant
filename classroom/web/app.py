@@ -148,10 +148,15 @@ def create_app(data_dir=None, bootstrap_key=None):
     def current():
         return jsonify(seating.get_current_arrangement())
 
+    @app.get('/api/v1/teacher/lessons/running')
+    def running_lesson():
+        with database.connect() as db:
+            return jsonify(lesson=attendance.running(db))
+
     @app.post('/api/v1/teacher/classes/<class_id>/publish')
     def publish(class_id):
-        body()
-        seating.publish_class(class_id)
+        data = body()
+        attendance.publish_class(class_id, data.get('expected_lesson_id'))
         return jsonify(ok=True)
 
     @app.get('/api/v1/teacher/classes/<class_id>/students')
@@ -196,7 +201,7 @@ def create_app(data_dir=None, bootstrap_key=None):
     @app.post("/api/v1/teacher/classes/<class_id>/rounds")
     def open_round(class_id):
         data = body()
-        return jsonify(seating.open_round(class_id, data.get('expected_current_id', UNSET))), 201
+        return jsonify(attendance.open_registration(class_id, data.get('expected_current_id', UNSET))), 201
 
     @app.post("/api/v1/teacher/rounds/<round_id>/close")
     def close_round(round_id):
@@ -212,7 +217,7 @@ def create_app(data_dir=None, bootstrap_key=None):
     def correct(round_id, seat_no):
         data = body()
         seating.correct(round_id, seat_no, data.get('name'), data.get('student_note', UNSET),
-                        data.get('student_id'), data.get('force_new', False))
+                        data.get('student_id'), data.get('force_new', False), role=data.get('role', UNSET))
         return jsonify(ok=True)
 
     @app.get("/api/v1/teacher/classes/<class_id>/export")

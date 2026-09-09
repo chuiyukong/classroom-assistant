@@ -41,4 +41,5 @@ def test_public_long_leave_only_no_private_notes(app,active):
     assert '私密原因' not in str(state) and 'change_requests' not in state
     s.checkin(lid,rows[0]['student_id'],1,'10.0.0.1','a')
     assert s.state(True,'10.0.0.1','a')['entries'][0]['status']=='present'
+    s.action(lid,'end')
     assert s.start(active[1]['id'])['entries'][0]['status']=='pending'

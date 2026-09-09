@@ -35,35 +35,44 @@ class SeatingService:
             self._class(db, class_id)
             return [dict(r) for r in db.execute('SELECT * FROM rounds WHERE class_id=? ORDER BY number DESC', (class_id,))]
 
-    def publish_class(self, class_id):
-        with self.database.connect(write=True) as db:
-            self._class(db, class_id)
-            opened = db.execute('SELECT class_id FROM rounds WHERE is_open=1').fetchone()
-            if opened and opened['class_id'] != class_id:
-                raise AppError('请先结束其他班级正在进行的登记，再切换上课班级', 409)
-            db.execute('UPDATE classroom_state SET active_class_id=? WHERE singleton=1', (class_id,))
+    def publish_class(self, class_id, connection=None):
+        if connection is None:
+            with self.database.connect(write=True) as db:
+                return self.publish_class(class_id, db)
+        db = connection
+        self._class(db, class_id)
+        opened = db.execute('SELECT class_id FROM rounds WHERE is_open=1').fetchone()
+        if opened and opened['class_id'] != class_id:
+            raise AppError('请先结束其他班级正在进行的登记，再切换上课班级', 409)
+        db.execute('UPDATE classroom_state SET active_class_id=? WHERE singleton=1', (class_id,))
 
-    def open_round(self, class_id, expected_current_id=UNSET):
-        with self.database.connect(write=True) as db:
-            self._class(db, class_id)
-            opened = db.execute('SELECT c.name, c.id FROM rounds r JOIN classes c ON c.id=r.class_id WHERE r.is_open=1').fetchone()
-            if opened and opened['id'] != class_id:
-                raise AppError(f'请先选择“{opened["name"]}”并结束其当前登记，再发起新登记', 409, 'round_already_open')
-            previous = db.execute('SELECT * FROM rounds WHERE class_id=? ORDER BY number DESC LIMIT 1', (class_id,)).fetchone()
-            if expected_current_id is not UNSET and expected_current_id != (previous['id'] if previous else None):
-                raise AppError('当前座位已变更，请刷新后重试', 409, 'stale_arrangement')
-            now = timestamp()
-            if previous:
-                db.execute('''UPDATE registrations SET student_note=COALESCE(
-                    (SELECT note FROM students WHERE students.id=registrations.student_id), student_note)
-                    WHERE round_id=?''', (previous['id'],))
-                db.execute('UPDATE rounds SET is_open=0, closed_at=COALESCE(closed_at, ?), archived_at=? WHERE id=?',
-                           (now, now, previous['id']))
-            number = previous['number'] + 1 if previous else 1
-            db.execute('''INSERT INTO rounds(id, class_id, layout_id, number, opened_at, is_open)
-                VALUES (?, ?, ?, ?, ?, 1)''', (uuid4().hex, class_id, self.layouts.current['id'], number, now))
-            db.execute('UPDATE classroom_state SET active_class_id=? WHERE singleton=1', (class_id,))
-        return self.get_arrangement(class_id)
+    def open_round(self, class_id, expected_current_id=UNSET, connection=None):
+        if connection is None:
+            with self.database.connect(write=True) as db:
+                return self.open_round(class_id, expected_current_id, db)
+        db = connection
+        self._class(db, class_id)
+        opened = db.execute('SELECT c.name, c.id FROM rounds r JOIN classes c ON c.id=r.class_id WHERE r.is_open=1').fetchone()
+        if opened and opened['id'] != class_id:
+            raise AppError(f'请先选择“{opened["name"]}”并结束其当前登记，再发起新登记', 409, 'round_already_open')
+        previous = db.execute('SELECT * FROM rounds WHERE class_id=? ORDER BY number DESC LIMIT 1', (class_id,)).fetchone()
+        if expected_current_id is not UNSET and expected_current_id != (previous['id'] if previous else None):
+            raise AppError('当前座位已变更，请刷新后重试', 409, 'stale_arrangement')
+        now = timestamp()
+        if previous:
+            roles = self.students.roles(db)
+            for sid, role in roles.items():
+                db.execute('UPDATE registrations SET role=? WHERE round_id=? AND student_id=?', (role, previous['id'], sid))
+            db.execute('''UPDATE registrations SET student_note=COALESCE(
+                (SELECT note FROM students WHERE students.id=registrations.student_id), student_note)
+                WHERE round_id=?''', (previous['id'],))
+            db.execute('UPDATE rounds SET is_open=0, closed_at=COALESCE(closed_at, ?), archived_at=? WHERE id=?',
+                       (now, now, previous['id']))
+        number = previous['number'] + 1 if previous else 1
+        db.execute('''INSERT INTO rounds(id, class_id, layout_id, number, opened_at, is_open)
+            VALUES (?, ?, ?, ?, ?, 1)''', (uuid4().hex, class_id, self.layouts.current['id'], number, now))
+        db.execute('UPDATE classroom_state SET active_class_id=? WHERE singleton=1', (class_id,))
+        return self.get_current_arrangement(db)
 
     def close_round(self, round_id):
         with self.database.connect(write=True) as db:
@@ -148,7 +157,7 @@ class SeatingService:
                        (round_id, client_id, request_id, seat_no, name, record_id))
             return {'accepted': True, 'duplicate': False, 'registration_id': record_id}
 
-    def correct(self, round_id, seat_no, name, student_note=UNSET, student_id=None, force_new=False):
+    def correct(self, round_id, seat_no, name, student_note=UNSET, student_id=None, force_new=False, role=UNSET):
         if name != '':
             name = clean_text(name, '姓名', 30)
         if student_note is not UNSET:
@@ -171,6 +180,8 @@ class SeatingService:
                               (round_id, sid, seat_no)).fetchone()
             if used:
                 raise AppError(f'此学生记录已在 {used[0]} 号座位；若为另一位同名学生，请勾选“同名新学生”', 409, 'student_registered')
+            if role is not UNSET:
+                self.students.set_role(db, sid, role)
             if student_note is not UNSET:
                 db.execute('UPDATE students SET note=?, updated_at=? WHERE id=?', (student_note, timestamp(), sid))
             if existing:
@@ -188,11 +199,14 @@ class SeatingService:
     def _arrangement(self, db, row):
         layout = self.layouts.get(row['layout_id'], db)
         groups = {s['number']: s['group'] for s in layout['seats']}
-        records = [dict(r) for r in db.execute('''SELECT g.id, g.seat_no, g.name, g.updated_at, g.student_id, g.source_ip,
+        records = [dict(r) for r in db.execute('''SELECT g.id, g.seat_no, g.name, g.updated_at, g.student_id, g.source_ip, g.role,
             CASE WHEN ? IS NULL THEN COALESCE(s.note, g.student_note) ELSE g.student_note END AS student_note
             FROM registrations g LEFT JOIN students s ON s.id=g.student_id WHERE g.round_id=? ORDER BY g.seat_no''',
                                              (row['archived_at'], row['id']))]
+        roles = self.students.roles(db)
         for record in records:
+            if row['archived_at'] is None:
+                record['role'] = roles.get(record['student_id'], 0)
             record['group'] = groups[record['seat_no']]
         return {'class': dict(self._class(db, row['class_id'])), 'round': dict(row), 'layout': layout,
                 'registrations': records, 'count': len(records), 'is_current': row['archived_at'] is None,

@@ -86,7 +86,7 @@ def run():
             other=request('/api/v1/teacher/classes','POST',{'name':'打包测试班','year':2026,'semester':'下学期'})
             assert other['id']!=cls['id']
             current = request('/api/v1/teacher/classes/' + cls['id'] + '/rounds', 'POST', {})
-            request('/api/v1/teacher/rounds/' + current['round']['id'] + '/seats/1', 'PUT', {'name': '测试同学'})
+            request('/api/v1/teacher/rounds/' + current['round']['id'] + '/seats/1', 'PUT', {'name': '测试同学','role':3})
             for number in range(2,51):
                 request('/api/v1/teacher/rounds/'+current['round']['id']+'/seats/'+str(number),'PUT',{'name':'测试生%02d'%number})
             workbook = load_workbook(BytesIO(request('/api/v1/teacher/classes/' + cls['id'] + '/export', raw=True)))
@@ -97,6 +97,7 @@ def run():
             state = request('/api/v1/student/state')
             assert next(c for c in state['seat_configs'] if c['seat_no'] == 2)['disabled']
             assert '设备备注' not in json.dumps(state, ensure_ascii=False)
+            assert state['registrations'][0]['role']==3
             assert request('/api/v1/teacher/info')['version'] == VERSION
             assert b'modules.js' in request('/teacher/attendance', raw=True)
             request('/api/v1/teacher/rounds/' + current['round']['id'] + '/close', 'POST', {})
@@ -120,6 +121,13 @@ def run():
             assert request('/api/v1/teacher/lessons/'+lid+'/events')['events']
             request('/api/v1/teacher/rollcall/selection','PUT',{'context_id':'attendance:'+lid,'student_ids':[lesson['entries'][0]['student_id']]})
             assert request('/api/v1/teacher/rollcall/current?scope=manual')['candidate_count']==1
+            try:
+                request('/api/v1/teacher/lessons','POST',{'round_id':current['round']['id']})
+                raise AssertionError('Repeated lesson start was accepted')
+            except urllib.error.HTTPError as error:assert error.code==409
+            request('/api/v1/teacher/classes/'+other['id']+'/publish','POST',{'expected_lesson_id':lid})
+            assert request('/api/v1/teacher/lessons/'+lid)['lesson']['ended_at']
+            assert request('/api/v1/teacher/lessons/'+lid)['entries'][0]['role']==3
             print('Packaged executable passed: isolated startup, bundled assets/templates, local authentication, class/round creation, seat correction, Excel export.')
         finally:
             # PyInstaller onefile creates a child; stop only this owned process tree.

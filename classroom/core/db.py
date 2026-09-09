@@ -156,6 +156,12 @@ ALTER TABLE lessons ADD COLUMN graduation_year INTEGER NOT NULL DEFAULT 0;
 """))
 
 
+MIGRATIONS.append((8, """
+CREATE TABLE student_roles (student_id TEXT PRIMARY KEY REFERENCES students(id), role INTEGER NOT NULL DEFAULT 0 CHECK(role BETWEEN 0 AND 3));
+ALTER TABLE registrations ADD COLUMN role INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE attendance_entries ADD COLUMN role INTEGER NOT NULL DEFAULT 0;
+"""))
+
 class Database:
     def __init__(self, path):
         self.path = Path(path)

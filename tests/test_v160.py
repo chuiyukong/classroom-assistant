@@ -89,7 +89,7 @@ def test_schema5_upgrade_backup_and_defaults(tmp_path):
     Database(path).migrate()
     assert list((tmp_path/'backups').glob('*.sqlite3'))
     with Database(path).connect() as db:
-        assert db.execute('PRAGMA user_version').fetchone()[0]==7
+        assert db.execute('PRAGMA user_version').fetchone()[0]==8
         assert db.execute('SELECT grade FROM classes').fetchone()[0]==''
         assert not db.execute('PRAGMA foreign_key_check').fetchall()
 

@@ -6,7 +6,7 @@
   var csrf = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
   var state = null, classId = '', historyId = '', seatButtons = {}, layoutId = '', selected = null;
   var pending = null, busy = false, connected = false, version = 0, timer = null;
-  var profiles = [], classNames = {}, noteDirty = false;
+  var profiles = [], classNames = {}, noteDirty = false, roleDirty = false;
   function el(id) { return document.getElementById(id); }
   function text(id, value) { el(id).textContent = value; }
   function notice(message, error) { text('notice', message); el('notice').className = 'notice' + (error ? ' error' : ''); }
@@ -43,7 +43,7 @@
         var line = make('div', 'seat-row');
         rowSeats.forEach(function (s) {
           var btn = make('button', 'seat'); btn.type = 'button';
-          btn.appendChild(make('span', 'number', s.number)); btn.appendChild(make('span', 'name', '空位'));
+          btn.appendChild(make('span', 'number', s.number)); btn.appendChild(make('span', 'name', '空位')); btn.appendChild(make('span','role-badge',''));
           btn.onclick = function () { showDialog(s.number); }; btn.setAttribute('data-seat', s.number);
           seatButtons[s.number] = btn; line.appendChild(btn);
         });
@@ -81,8 +81,9 @@
     data.layout.seats.forEach(function (s) {
       var btn = seatButtons[s.number], item = record(s.number), config = device(s.number);
       if (config.disabled) { disabled++; } else if (!item) { available++; }
-      btn.className = 'seat' + (item ? ' taken' : '') + (config.disabled ? ' unavailable' : '') + (s.number === selected ? ' chosen' : '');
+      btn.className = 'seat' + (item ? ' taken' : '') + (item && item.role ? ' has-role' : '') + (config.disabled ? ' unavailable' : '') + (s.number === selected ? ' chosen' : '');
       btn.children[1].textContent = item ? item.name + (config.disabled ? '（停用）' : '') : (config.disabled ? '设备停用' : '空位');
+      btn.querySelector('.role-badge').textContent=item?['','班长','课代表','班长·课代表'][item.role||0]:'';
       btn.title = s.number + ' 号 · ' + (item ? item.name : '未登记') + (config.disabled ? ' · 设备停用' : '');
       if (teacher) { btn.title += (config.note ? '\n设备：' + config.note : '') + (item && item.student_note ? '\n学生：' + item.student_note : ''); }
       btn.setAttribute('aria-label', btn.title);
@@ -126,6 +127,7 @@
     if (teacher) {
       var cfg = device(number);
       el('seat-form').hidden = !state.round;
+      roleDirty=false;el('role-monitor').checked=!!(item && (item.role&1));el('role-representative').checked=!!(item && (item.role&2));
       el('student-note').value = item ? item.student_note || '' : ''; noteDirty = false;
       el('new-identity').checked = false;
       el('seat-disabled').checked = !!cfg.disabled; el('device-note').value = cfg.note || ''; text('device-message', '');
@@ -161,6 +163,7 @@
     busy = true; el('submit-seat').disabled = true; el('clear-seat').disabled = true; buttons();
     var data = {name: name}, url = '/api/v1/teacher/rounds/' + roundId + '/seats/' + number, method = 'PUT';
     if (teacher && name) {
+      if(roleDirty){data.role=(el('role-monitor').checked?1:0)+(el('role-representative').checked?2:0);}
       data.force_new = el('new-identity').checked;
       data.student_id = data.force_new ? null : (el('student-record').value || null);
       if (noteDirty) { data.student_note = el('student-note').value; }
@@ -209,13 +212,14 @@
   }
   function profile(id) { for (var i = 0; i < profiles.length; i++) { if (profiles[i].id === id) { return profiles[i]; } } return null; }
   if (teacher) {
+    el('role-monitor').onchange=el('role-representative').onchange=function(){roleDirty=true;};
     el('student-note').oninput = function () { noteDirty = true; };
     el('student-record').onchange = function () {
       var p = profile(this.value);
-      if (p) { el('student-name').value = p.name; el('student-note').value = p.note; el('new-identity').checked = false; noteDirty = false; }
+      if (p) { roleDirty=false;el('role-monitor').checked=!!(p.role&1);el('role-representative').checked=!!(p.role&2);el('student-name').value = p.name; el('student-note').value = p.note; el('new-identity').checked = false; noteDirty = false; }
     };
     el('new-identity').onchange = function () {
-      if (this.checked) { el('student-record').value = ''; el('student-note').value = ''; noteDirty = true; }
+      if (this.checked) { roleDirty=true;el('role-monitor').checked=false;el('role-representative').checked=false;el('student-record').value = ''; el('student-note').value = ''; noteDirty = true; }
     };
     el('device-form').onsubmit = function (event) {
       event.preventDefault(); if (busy || !state) { return; }
@@ -227,8 +231,14 @@
     };
     el('publish-class').onclick = function () {
       busy = true; buttons();
-      api('POST', '/api/v1/teacher/classes/' + classId + '/publish', {}, function (err) {
-        busy = false; notice(err || '已设为当前上课班级，学生页面会自动更新。', !!err); refresh();
+      var target=classId;
+      api('GET','/api/v1/teacher/lessons/running',null,function(err,d){
+        if(err){busy=false;buttons();notice(err,true);return;}
+        var lesson=d.lesson;
+        if(lesson && !confirm(lesson.class_name+' 正在上课。确认下课并切换班级？未签到学生将记为缺勤，本节日志转为只读。')){busy=false;buttons();return;}
+        api('POST','/api/v1/teacher/classes/'+target+'/publish',{expected_lesson_id:lesson?lesson.id:null},function(error){
+          busy=false;notice(error||'已设为当前上课班级，学生页面会自动更新。',!!error);refresh();
+        });
       });
     };
     api('GET', '/api/v1/teacher/info', null, function (err, data) {

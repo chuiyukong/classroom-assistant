@@ -28,6 +28,7 @@ def test_snapshot_move_long_leave_and_next_lesson(app, active):
     s.checkin(lid, rows[1]['student_id'], 64, '10.0.0.2', 'client2', move_reason='device_fault')
     assert s.detail(lid)['counts']['actual'] == 1
     assert app.extensions['seating'].get_current_arrangement()['registrations'][1]['seat_no'] == 2
+    s.action(lid, 'end')
     next_lesson = s.start(active[1]['id'])
     assert next_lesson['entries'][0]['status'] == 'long_leave'
     assert next_lesson['counts']['actual'] == 0
@@ -36,6 +37,7 @@ def test_snapshot_move_long_leave_and_next_lesson(app, active):
         s.mark(lid, rows[0]['student_id'], 'pending')
     new_id = next_lesson['lesson']['id']; s.action(new_id, 'open')
     s.checkin(new_id, rows[0]['student_id'], 2, '10.0.0.1', 'client1', move_reason='device_fault')
+    s.action(new_id, 'end')
     assert s.start(active[1]['id'])['entries'][0]['status'] == 'pending'
     assert s.detail(lid)['entries'][0]['status'] == 'long_leave'
 
@@ -122,10 +124,10 @@ def test_restart_switch_round_and_class_isolation(app, active):
     restarted=create_app(app.config['DATA_DIR'])
     assert restarted.extensions['attendance'].state()['counts']['actual']==1
     other=app.extensions['classes'].create('另一班')
-    app.extensions['seating'].publish_class(other['id'])
+    s.publish_class(other['id'],lid)
     assert s.state()['lesson'] is None
     with pytest.raises(AppError):s.checkin(lid,rows[1]['student_id'],2,'10.0.0.2','b')
-    app.extensions['seating'].publish_class(active[0]['id'])
+    s.publish_class(active[0]['id'])
     app.extensions['seating'].open_round(active[0]['id'])
     assert s.state()['lesson'] is None
     assert s.history(active[0]['id'])[0]['id']==lid
