@@ -141,6 +141,21 @@ CREATE TABLE rollcall_selections (
 """))
 
 
+MIGRATIONS.append((7, """
+CREATE TABLE classes_v7 (
+ id TEXT PRIMARY KEY,name TEXT NOT NULL,created_at TEXT NOT NULL,deleted_at TEXT,
+ year INTEGER NOT NULL DEFAULT 0,semester TEXT NOT NULL DEFAULT '',grade TEXT NOT NULL DEFAULT '',
+ graduation_year INTEGER NOT NULL DEFAULT 0,
+ UNIQUE(name,year,semester,graduation_year)
+);
+INSERT INTO classes_v7(id,name,created_at,deleted_at,year,semester,grade)
+ SELECT id,name,created_at,deleted_at,year,semester,grade FROM classes;
+DROP TABLE classes;
+ALTER TABLE classes_v7 RENAME TO classes;
+ALTER TABLE lessons ADD COLUMN graduation_year INTEGER NOT NULL DEFAULT 0;
+"""))
+
+
 class Database:
     def __init__(self, path):
         self.path = Path(path)

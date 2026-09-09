@@ -71,3 +71,7 @@ class StudentService:
         sid = uuid4().hex
         db.execute('INSERT INTO students VALUES (?, ?, ?, ?, ?, ?, ?)', (sid, class_id, name, key, '', timestamp(), timestamp()))
         return sid
+
+    def export_data(self,db,ids):
+        marks=','.join('?' for _ in ids)
+        return {'students':[dict(r) for r in db.execute('SELECT * FROM students WHERE class_id IN ('+marks+')',ids)]}

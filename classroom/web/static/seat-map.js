@@ -22,7 +22,7 @@
     }
   };
   SeatMap.prototype.update=function(entries,options){
-    options=options||{};var labels={pending:'未签到',present:'已签到',late:'迟到 · 已签到',leave:'请假',absent:'缺勤',long_leave:'长期请假'};
+    options=options||{};var labels={pending:'未签到',present:'已签到',late:'已签到·迟到',leave:'请假',absent:'缺勤',long_leave:'长期请假'};
     var fixed={},actual={},disabled=options.disabled||[];
     entries.forEach(function(r){fixed[r.original_seat]=r;if(r.seat_no){actual[r.seat_no]=r;}});
     for(var number in this.buttons){if(Object.prototype.hasOwnProperty.call(this.buttons,number)){

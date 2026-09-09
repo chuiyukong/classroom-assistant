@@ -14,6 +14,7 @@ from classroom.core.config import prepare_data
 from classroom.core.db import Database
 from classroom.core.errors import AppError
 from classroom.exports.excel import ExcelExportService
+from classroom.exports.class_csv import ClassCsvExport
 from classroom.layouts.service import LayoutService
 from classroom.seating.service import SeatingService, UNSET
 from classroom.version import VERSION
@@ -173,6 +174,12 @@ def create_app(data_dir=None, bootstrap_key=None):
         seating.seats.update(layout_id, seat_no, data.get('disabled'), data.get('note'))
         return jsonify(ok=True)
 
+    @app.get('/api/v1/teacher/classes/export-csv')
+    def export_class_csv():
+        ids=request.args.get('ids','').split(',')
+        output=ClassCsvExport(database,classes,seating,attendance,rollcall).export(ids)
+        return send_file(output,as_attachment=True,download_name='班级全部数据.csv',mimetype='text/csv; charset=utf-8')
+
     @app.get("/api/v1/teacher/classes")
     def list_classes():
         return jsonify(classes=classes.list(request.args.get('deleted') == '1'), active_class_id=seating.get_current_arrangement()['active_class_id'])
@@ -180,7 +187,7 @@ def create_app(data_dir=None, bootstrap_key=None):
     @app.post("/api/v1/teacher/classes")
     def new_class():
         data = body()
-        return jsonify(classes.create(data.get("name"), data.get("year", 0), data.get("semester", ""), data.get("grade", ""))), 201
+        return jsonify(classes.create(data.get("name"), data.get("year", 0), data.get("semester", ""), data.get("grade", ""),data.get("graduation_year",0))), 201
 
     @app.get("/api/v1/teacher/classes/<class_id>/rounds")
     def list_rounds(class_id):
@@ -282,8 +289,7 @@ def create_app(data_dir=None, bootstrap_key=None):
 
     @app.post('/api/v1/teacher/seat-changes/<request_id>')
     def decide_seat_change(request_id):
-        attendance.decide_move(request_id, body().get('approve'))
-        return jsonify(ok=True)
+        return jsonify(attendance.decide_move(request_id, body().get('approve')))
 
     @app.get('/api/v1/teacher/rollcall/current')
     def current_draw_state():
@@ -292,12 +298,22 @@ def create_app(data_dir=None, bootstrap_key=None):
     @app.post('/api/v1/teacher/rollcall/current')
     def current_draw():
         data=body()
-        return jsonify(rollcall.draw_current(data.get('context_id'),data.get('scope','all')))
+        return jsonify(rollcall.draw_current(data.get('context_id'),data.get('scope','all'),data.get('candidate_ids')))
 
     @app.put('/api/v1/teacher/rollcall/selection')
     def save_draw_selection():
         data=body()
         return jsonify(rollcall.save_selection(data.get('context_id'),data.get('student_ids')))
+
+    @app.put('/api/v1/teacher/classes/<cid>/graduation')
+    def class_graduation(cid):
+        classes.set_graduation(cid,body().get('graduation_year'))
+        return jsonify(ok=True)
+
+    @app.get('/api/v1/student/rollcall')
+    def student_rollcall():
+        init_session()
+        return jsonify(rollcall.student_announcement(request.remote_addr,session['client_id']))
 
     @app.put('/api/v1/teacher/classes/<cid>/grade')
     def class_grade(cid):

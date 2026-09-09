@@ -81,8 +81,8 @@ def run():
             assert request('/static/app.css',raw=True)==(ROOT/'classroom/web/static/app.css').read_bytes()
             assert request('/static/logs.js',raw=True)==(ROOT/'classroom/web/static/logs.js').read_bytes()
             assert b'class-select' in request('/teacher', raw=True)
-            cls = request('/api/v1/teacher/classes', 'POST', {'name': '打包测试班', 'year':2026, 'semester':'上学期'})
-            assert cls['year']==2026 and cls['semester']=='上学期'
+            cls = request('/api/v1/teacher/classes', 'POST', {'name': '打包测试班', 'year':2026, 'semester':'上学期','graduation_year':2029})
+            assert cls['year']==2026 and cls['semester']=='上学期' and cls['graduation_year']==2029
             other=request('/api/v1/teacher/classes','POST',{'name':'打包测试班','year':2026,'semester':'下学期'})
             assert other['id']!=cls['id']
             current = request('/api/v1/teacher/classes/' + cls['id'] + '/rounds', 'POST', {})
@@ -114,6 +114,9 @@ def run():
             assert request('/api/v1/teacher/lessons/' + lid)['counts']['actual'] == 1
             assert request('/api/v1/teacher/lessons/' + lid + '/export', raw=True).startswith(b'\xef\xbb\xbf')
             assert b'logs.js' in request('/teacher/data',raw=True)
+            assert request('/api/v1/teacher/classes/export-csv?ids='+cls['id'],raw=True).startswith(b'\xef\xbb\xbf')
+            assert request('/static/student-rollcall.js',raw=True)==(ROOT/'classroom/web/static/student-rollcall.js').read_bytes()
+            assert request('/api/v1/student/rollcall')['announcement'] is None
             assert request('/api/v1/teacher/lessons/'+lid+'/events')['events']
             request('/api/v1/teacher/rollcall/selection','PUT',{'context_id':'attendance:'+lid,'student_ids':[lesson['entries'][0]['student_id']]})
             assert request('/api/v1/teacher/rollcall/current?scope=manual')['candidate_count']==1

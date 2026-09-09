@@ -35,7 +35,7 @@ class AttendanceService:
             db.execute("UPDATE attendance_entries SET status='absent',recheckin_allowed=0 WHERE status='pending' AND lesson_id IN (SELECT id FROM lessons WHERE ended_at IS NULL AND attendance_started_at IS NOT NULL)")
             db.execute('UPDATE lessons SET ended_at=?, attendance_closed_at=CASE WHEN attendance_started_at IS NOT NULL THEN COALESCE(attendance_closed_at,?) END WHERE ended_at IS NULL', (now, now))
             lid = uuid4().hex
-            db.execute('INSERT INTO lessons(id,class_id,round_id,class_name,started_at,late_after,layout_id,grade,year,semester) VALUES (?,?,?,?,?,?,?,?,?,?)', (lid, data['class']['id'], expected_round_id, data['class']['name'], now, late_after, data['layout']['id'], data['class'].get('grade',''), data['class'].get('year',0), data['class'].get('semester','')))
+            db.execute('INSERT INTO lessons(id,class_id,round_id,class_name,started_at,late_after,layout_id,grade,year,semester,graduation_year) VALUES (?,?,?,?,?,?,?,?,?,?,?)', (lid, data['class']['id'], expected_round_id, data['class']['name'], now, late_after, data['layout']['id'], data['class'].get('grade',''), data['class'].get('year',0), data['class'].get('semester',''),data['class'].get('graduation_year',0)))
             for r in data['registrations']:
                 if not r['student_id']:
                     raise AppError('名单缺少学生编号，请重新登记', 409)
@@ -196,8 +196,13 @@ class AttendanceService:
             if not signed or signed['seat_no'] != q['to_seat']:
                 raise AppError('签到座位已变更，请核对',409)
             if approve and q['kind']=='long_term':
-                self.seating.approve_move(db,lesson['round_id'],q['student_id'],q['from_seat'],q['to_seat'])
+                updated=self.seating.approve_move(db,lesson['round_id'],q['student_id'],q['from_seat'],q['to_seat'])
             db.execute('UPDATE seat_change_requests SET status=?,decided_at=? WHERE id=?',('approved' if approve else 'rejected',timestamp(),request_id))
+            result={'ok':True,'kind':q['kind'],'class_id':lesson['class_id'],'seat_no':q['to_seat'],'fixed_updated':bool(approve and q['kind']=='long_term')}
+        if result['fixed_updated']:
+            data=self.seating.get_current_arrangement()
+            result['registration']=next((r for r in data['registrations'] if r['student_id']==q['student_id']),None)
+        return result
 
     def history(self, class_id=None, day=None, grade=None):
         if day:
@@ -227,3 +232,11 @@ class AttendanceService:
         with self.database.connect() as db:
             self.detail(lid,db)
             return [dict(r) for r in db.execute('SELECT * FROM attendance_events WHERE lesson_id=? ORDER BY rowid',(lid,))]
+
+    def export_data(self,db,ids):
+        marks=','.join('?' for _ in ids)
+        result={'lessons':[dict(r) for r in db.execute('SELECT * FROM lessons WHERE class_id IN ('+marks+')',ids)],
+                'attendance_leave':[dict(r) for r in db.execute('SELECT * FROM attendance_leave WHERE class_id IN ('+marks+')',ids)]}
+        for table in ('attendance_entries','attendance_events','seat_change_requests'):
+            result[table]=[dict(r) for r in db.execute('SELECT t.*,l.class_id FROM '+table+' t JOIN lessons l ON l.id=t.lesson_id WHERE l.class_id IN ('+marks+')',ids)]
+        return result

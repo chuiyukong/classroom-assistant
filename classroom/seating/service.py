@@ -226,6 +226,10 @@ class SeatingService:
         if db.execute('SELECT 1 FROM registrations WHERE round_id=? AND seat_no=?', (round_id, to_seat)).fetchone():
             raise AppError('目标座位已有固定登记，请先在在线选座中调整，不能覆盖其他学生', 409)
         db.execute('UPDATE registrations SET seat_no=?,updated_at=? WHERE id=?', (to_seat, timestamp(), current['id']))
+        saved=db.execute('SELECT student_id,seat_no FROM registrations WHERE id=?',(current['id'],)).fetchone()
+        if not saved or saved['seat_no']!=to_seat:
+            raise AppError('固定座位保存未完成，请重试',409)
+        return dict(saved)
 
     @staticmethod
     def _round(db, round_id):
@@ -245,3 +249,10 @@ class SeatingService:
     def _seat(self, db, row, seat_no):
         if type(seat_no) is not int or seat_no not in {s['number'] for s in self.layouts.get(row['layout_id'], db)['seats']}:
             raise AppError('座位号无效')
+
+    def export_data(self,db,ids):
+        marks=','.join('?' for _ in ids)
+        result={'rounds':[dict(r) for r in db.execute('SELECT * FROM rounds WHERE class_id IN ('+marks+')',ids)]}
+        for table in ('registrations','submissions'):
+            result[table]=[dict(r) for r in db.execute('SELECT t.*,r.class_id FROM '+table+' t JOIN rounds r ON r.id=t.round_id WHERE r.class_id IN ('+marks+')',ids)]
+        return result

@@ -109,12 +109,13 @@
       var signature=JSON.stringify(d.change_requests||[])+live;
       if(signature!==lastRequests){lastRequests=signature;el('change-requests').textContent='';
         (d.change_requests||[]).forEach(function(q){var row=make('div','','change-request');row.appendChild(make('span',q.name+' '+(q.kind==='temporary'?'临时换座':'长期换座')+' · '+q.from_seat+' → '+q.to_seat+' · '+({pending:'待审批',approved:'已同意',rejected:'已拒绝',cancelled:'已取消'}[q.status])));
-          if(q.status==='pending' && live){[true,false].forEach(function(yes){var b=make('button',yes?'同意':'拒绝','secondary');b.onclick=function(){if(yes && q.kind!=='temporary' && !confirm('同意 '+q.name+' 长期换至 '+q.to_seat+' 号？将修改当前座位，历史不变。')){return;}save('teacher/seat-changes/'+q.id,{approve:yes});};row.appendChild(b);});}el('change-requests').appendChild(row);});
+          if(q.status==='pending' && live){[true,false].forEach(function(yes){var b=make('button',yes?'同意':'拒绝','secondary');b.onclick=function(){if(yes && q.kind!=='temporary' && !confirm('同意 '+q.name+' 长期换至 '+q.to_seat+' 号？将修改当前座位，历史不变。')){return;}save('teacher/seat-changes/'+q.id,{approve:yes},'POST',function(result){if(result.fixed_updated){var link=el('move-saved-link');link.hidden=false;link.href='/teacher?class_id='+encodeURIComponent(result.class_id);link.textContent='固定座位已保存至 '+result.seat_no+' 号 · 查看当前座位';message('长期换座已保存，当前固定座位已更新');}});};row.appendChild(b);});}el('change-requests').appendChild(row);});
         if(!(d.change_requests||[]).length){put('change-requests','暂无申请');}}
     } else {
       el('checkin-button').disabled=!canCheckin() || busy;
       var own=(d.entries||[]).filter(function(r){return r.student_id===d.my_student_id;})[0];
-      put('checkin-instruction',own?'姓名'+own.name+'已在'+own.seat_no+'号座位签到。':'请按登记的座位就坐和签到，若设备异常请在空座位就坐签到。');
+      put('checkin-instruction','请按登记的座位就坐和签到，若设备异常请在空座位就坐签到。');
+      if(own){var instruction=el('checkin-instruction');instruction.textContent='';instruction.appendChild(make('strong',own.name,'identity-chip'));instruction.appendChild(document.createTextNode('已在'+own.seat_no+'号座位签到。'));}
       put('checkin-status',d.my_student_id ? '' : (canCheckin() ? '点击座位，输入姓名签到' : '签到未开放'));
       map(d.entries||[]); countdown();
     }
@@ -141,7 +142,7 @@
   }
   if (module === 'data') {
     var classData=[];
-    function renderClasses(){el('class-list').textContent='';classData.filter(function(c){return (!el('filter-year').value || String(c.year)===el('filter-year').value) && (!el('filter-semester').value || (c.semester||'unset')===el('filter-semester').value);}).forEach(function(c){var label=make('label','','class-choice'),check=document.createElement('input');check.type='checkbox';check.value=c.id;label.appendChild(check);label.appendChild(make('span',c.name+' · '+(c.year?c.year+'年 '+c.semester:'未设置学期')));var grade=make('input','','grade-edit');grade.value=c.grade||'';grade.placeholder='年级';grade.maxLength=20;grade.setAttribute('aria-label',c.name+'年级');label.appendChild(grade);var update=make('button','保存年级','secondary');update.type='button';update.onclick=function(e){e.preventDefault();save('teacher/classes/'+c.id+'/grade',{grade:grade.value},'PUT',function(){classes();var event=document.createEvent('Event');event.initEvent('classes-updated',true,true);window.dispatchEvent(event);});};label.appendChild(update);el('class-list').appendChild(label);});}
+    function renderClasses(){el('class-list').textContent='';classData.filter(function(c){return (!el('filter-year').value || String(c.year)===el('filter-year').value) && (!el('filter-semester').value || (c.semester||'unset')===el('filter-semester').value);}).forEach(function(c){var label=make('label','','class-choice'),check=document.createElement('input');check.type='checkbox';check.value=c.id;label.appendChild(check);label.appendChild(make('span',c.name+' · '+(c.graduation_year?c.graduation_year+'届':'未设置届数')+' · '+(c.year?c.year+'年 '+c.semester:'未设置学期')));var grade=make('input','','grade-edit');grade.type='number';grade.min=1900;grade.max=2200;grade.value=c.graduation_year||'';grade.placeholder='毕业届数';grade.setAttribute('aria-label',c.name+'毕业届数');label.appendChild(grade);var update=make('button','保存届数','secondary');update.type='button';update.onclick=function(e){e.preventDefault();save('teacher/classes/'+c.id+'/graduation',{graduation_year:Number(grade.value)||0},'PUT',function(){classes();var event=document.createEvent('Event');event.initEvent('classes-updated',true,true);window.dispatchEvent(event);});};label.appendChild(update);el('class-list').appendChild(label);});}
     el('filter-year').onchange=renderClasses;el('filter-semester').onchange=renderClasses;
     function classes() {
       api('GET', 'teacher/classes' + (recycled ? '?deleted=1' : ''), null, function (err, d) {
@@ -153,6 +154,7 @@
     el('show-live').onclick = function () { recycled = false; classes(); }; el('show-deleted').onclick = function () { recycled = true; classes(); };
     el('select-all').onclick = function () { var checks = el('class-list').querySelectorAll('input[type=checkbox]'); var all = Array.prototype.every.call(checks, function (c) { return c.checked; }); Array.prototype.forEach.call(checks, function (c) { c.checked = !all; }); };
     el('manage-selected').onclick = function () { var ids = [], names = []; Array.prototype.forEach.call(el('class-list').querySelectorAll('input[type=checkbox]:checked'), function (c) { ids.push(c.value); names.push(c.parentNode.textContent); }); if (!ids.length) { message('请先选择班级'); return; } if (!confirm((recycled ? '恢复' : '移入回收站并结束相关登记和课堂') + '：\n' + names.join('\n'))) { return; } save('teacher/classes/manage', {ids:ids, action: recycled ? 'restore' : 'delete'}, 'POST', function () { classes(); context(); }); };
+    el('export-classes').onclick=function(){var ids=[];Array.prototype.forEach.call(el('class-list').querySelectorAll('input[type=checkbox]:checked'),function(c){ids.push(c.value);});if(!ids.length){message('请先选择班级');return;}window.location.href='/api/v1/teacher/classes/export-csv?ids='+encodeURIComponent(ids.join(','));};
     classes(); context(); return;
   }
   if (teacher) {
@@ -173,13 +175,18 @@
       el('draw-scope').onchange=function(){if(drawing){this.value=drawScope;return;}drawScope=this.value;refresh();};
       el('draw-button').onclick = function () {
         if(drawing || !state || !state.candidate_count){return;} drawing=true;el('draw-button').disabled=true;
-        var contextId=state.context_id, entries=state.candidates;
-        var reduced=window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-        function flash(){if(!entries.length){return;}var r=entries[Math.floor(Math.random()*entries.length)];seatMap.highlight(r.seat_no);put('draw-name',r.name);}
-        var animation=reduced?null:setInterval(flash,110);
-        api('POST','teacher/rollcall/current',{context_id:contextId,scope:drawScope},function(err,d){setTimeout(function(){clearInterval(animation);drawing=false;
-          if(state.context_id!==contextId){seatMap.highlight(null);put('draw-name','名单已切换');refresh();return;}
-          if(err){message(err);put('draw-name','未抽取');seatMap.highlight(null);}else{put('draw-name',d.name);seatMap.highlight(d.seat_no);}refresh();},reduced?0:900);});
+        var contextId=state.context_id, scope=drawScope, entries=state.candidates.slice(), order=entries.slice(), index=0;
+        for(var j=order.length-1;j>0;j--){var k=Math.floor(Math.random()*(j+1)),temp=order[j];order[j]=order[k];order[k]=temp;}
+        el('draw-scope').disabled=true;put('draw-name','正在随机点名…');
+        function finish(err,d){drawing=false;el('draw-scope').disabled=false;if(err){message(err);put('draw-name','未抽取');seatMap.highlight(null);}else{put('draw-name',d.name);seatMap.highlight(d.seat_no);}refresh();}
+        function step(){
+          if(!state || state.context_id!==contextId){finish('名单已切换，请重新点名');return;}
+          if(index<order.length){seatMap.highlight(order[index++].seat_no);setTimeout(step,Math.max(55,Math.floor(1200/order.length)));return;}
+          api('POST','teacher/rollcall/current',{context_id:contextId,scope:scope,candidate_ids:entries.map(function(r){return r.student_id;})},function(err,d){
+            if(!state || state.context_id!==contextId){finish('名单已切换，请重新点名');return;}finish(err,d);
+          });
+        }
+        step();
       };
     }
   } else {
