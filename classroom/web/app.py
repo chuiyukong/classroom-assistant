@@ -30,6 +30,10 @@ def create_app(data_dir=None, bootstrap_key=None):
     app.config.update(SECRET_KEY=secret, MAX_CONTENT_LENGTH=16384,
                       SESSION_COOKIE_HTTPONLY=True, SESSION_COOKIE_SAMESITE="Strict",
                       SESSION_COOKIE_NAME="classroom_session", DATA_DIR=root, PORT=port)
+    from classroom.core.diagnostics import Diagnostics
+    diagnostics = Diagnostics(root)
+    diagnostics.attach(app)
+    app.extensions['diagnostics'] = diagnostics
     key = bootstrap_key or secrets.token_urlsafe(32)
     app.config["BOOTSTRAP_KEY"] = key
     log = RotatingFileHandler(root / "application.log", maxBytes=1_000_000, backupCount=3, encoding="utf-8")
@@ -39,6 +43,7 @@ def create_app(data_dir=None, bootstrap_key=None):
     # Owner explicitly waived backup for the v1 -> v2 TEST-data upgrade.
     # The exception is schema-specific; later migrations retain normal backups.
     database.migrate(skip_backup_for_version=2)
+    database.diagnostics = diagnostics
     layouts = LayoutService(database, root / "config")
     classes = ClassService(database)
     settings = json.loads((root / 'settings.json').read_text(encoding='utf-8'))
@@ -52,6 +57,10 @@ def create_app(data_dir=None, bootstrap_key=None):
     app.extensions.update(attendance=attendance, rollcall=rollcall)
     app.extensions.update(database=database, layouts=layouts, classes=classes, seating=seating, exports=exports,
                           students=seating.students, seat_configs=seating.seats)
+
+    @app.get('/health')
+    def health():
+        return jsonify(status='ok', version=VERSION)
 
     def teacher_origin():
         # Validate Host as well as socket address: blocks DNS rebinding.
@@ -187,7 +196,13 @@ def create_app(data_dir=None, bootstrap_key=None):
 
     @app.get("/api/v1/teacher/classes")
     def list_classes():
-        return jsonify(classes=classes.list(request.args.get('deleted') == '1'), active_class_id=seating.get_current_arrangement()['active_class_id'])
+        counts=seating.class_counts()
+        return jsonify(classes=[dict(c,student_count=counts.get(c['id'],0)) for c in classes.list(request.args.get('deleted') == '1')], active_class_id=seating.get_current_arrangement()['active_class_id'])
+
+    @app.put('/api/v1/teacher/classes/<class_id>')
+    def rename_class(class_id):
+        data=body();classes.rename(class_id,data.get('name'),data.get('graduation_year'))
+        return jsonify(ok=True)
 
     @app.post("/api/v1/teacher/classes")
     def new_class():

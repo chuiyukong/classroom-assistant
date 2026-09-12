@@ -129,6 +129,18 @@ def run():
             assert request('/api/v1/teacher/lessons/'+lid)['lesson']['ended_at']
             assert request('/api/v1/teacher/lessons/'+lid)['entries'][0]['role']==3
             print('Packaged executable passed: isolated startup, bundled assets/templates, local authentication, class/round creation, seat correction, Excel export.')
+            assert request('/health')['status']=='ok'
+            classes=request('/api/v1/teacher/classes')['classes']
+            assert next(c for c in classes if c['id']==cls['id'])['student_count']==50
+            request('/api/v1/teacher/classes/'+cls['id'],'PUT',{'name':'包测试改名','graduation_year':2029})
+            deadline=time.monotonic()+10
+            while time.monotonic()<deadline:
+                events=[json.loads(line) for line in (data_dir/'diagnostics.jsonl').read_text(encoding='utf-8').splitlines()]
+                if any(e['event']=='heartbeat' for e in events):break
+                time.sleep(.25)
+            assert any(e['event']=='server_started' and e['version']==VERSION and e['connection_limit']==400 for e in events)
+            assert any(e['event']=='heartbeat' and e['health']=='ok' for e in events)
+            print('Packaged diagnostics, health, 400 connections, 50 students, class count/rename passed.')
         finally:
             # PyInstaller onefile creates a child; stop only this owned process tree.
             subprocess.run(['taskkill', '/PID', str(process.pid), '/T', '/F'], startupinfo=startup,

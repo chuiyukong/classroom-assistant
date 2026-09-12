@@ -62,6 +62,7 @@ def run():
     b.close();print('v1.8 browser checks passed: 64 candidates in %.2fs; single/manual/late scopes; role badges; lesson lock and confirmed/cancelled switch.'%elapsed)
   finally:
    server.close()
+   app.extensions['diagnostics'].close()
    for handler in list(app.logger.handlers):
     handler.close();app.logger.removeHandler(handler)
 if __name__=='__main__':run()

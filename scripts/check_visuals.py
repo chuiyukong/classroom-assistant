@@ -83,6 +83,7 @@ def run():
                 print('50-student visual checks passed: 15px regular names / 12px status, full-card state colors, inset dividers, state colors, compact maps, grade log filters, all pages.')
         finally:
             server.close()
+            app.extensions['diagnostics'].close()
             for handler in list(app.logger.handlers):
                 if hasattr(handler,'baseFilename'):app.logger.removeHandler(handler);handler.close()
 

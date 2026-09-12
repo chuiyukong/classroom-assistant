@@ -41,6 +41,16 @@ class ClassService:
                 raise AppError('班级不存在', 404)
             db.execute('UPDATE classes SET deleted_at=? WHERE id=?', (timestamp() if deleted else None, cid))
 
+    def rename(self,cid,name,graduation_year):
+        name=clean_text(name,'班级名称',40)
+        self.validate_graduation(graduation_year)
+        try:
+            with self.database.connect(write=True) as db:
+                if not db.execute('SELECT 1 FROM classes WHERE id=?',(cid,)).fetchone():raise AppError('班级不存在',404)
+                db.execute('UPDATE classes SET name=?,graduation_year=? WHERE id=?',(name,graduation_year,cid))
+        except sqlite3.IntegrityError:
+            raise AppError('该届该学期已有同名班级',409)
+
     def set_grade(self, cid, grade):
         if not isinstance(grade, str) or len(grade.strip()) > 20:
             raise AppError('年级最多 20 个字')

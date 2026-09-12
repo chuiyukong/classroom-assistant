@@ -165,25 +165,33 @@ ALTER TABLE attendance_entries ADD COLUMN role INTEGER NOT NULL DEFAULT 0;
 class Database:
     def __init__(self, path):
         self.path = Path(path)
+        self.diagnostics = None
 
     @contextmanager
     def connect(self, write=False):
-        db = sqlite3.connect(self.path, timeout=15, isolation_level=None)
-        db.row_factory = sqlite3.Row
-        db.execute("PRAGMA foreign_keys=ON")
-        db.execute("PRAGMA busy_timeout=15000")
+        import time
+        start = time.monotonic()
+        db = None
+        begun = start
+        error = None
         try:
-            if write:
-                db.execute("BEGIN IMMEDIATE")
-            else:
-                db.execute("BEGIN")
+            db = sqlite3.connect(self.path, timeout=15, isolation_level=None)
+            db.row_factory = sqlite3.Row
+            db.execute("PRAGMA foreign_keys=ON")
+            db.execute("PRAGMA busy_timeout=15000")
+            db.execute("BEGIN IMMEDIATE" if write else "BEGIN")
+            begun = time.monotonic()
             yield db
             db.commit()
-        except Exception:
-            db.rollback()
+        except Exception as exc:
+            error = exc
+            if begun == start:begun = time.monotonic()
+            if db is not None:db.rollback()
             raise
         finally:
-            db.close()
+            if db is not None:db.close()
+            if self.diagnostics:
+                self.diagnostics.db_event(write, (begun-start)*1000, (time.monotonic()-begun)*1000, error)
 
     def migrate(self, skip_backup_for_version=None):
         with sqlite3.connect(self.path) as db:

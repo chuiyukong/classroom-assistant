@@ -122,3 +122,7 @@ body[data-module="attendance"] .group-label{margin:0;line-height:18px}body[data-
 @media(max-height:850px){body[data-module="rollcall"] .draw-panel{padding-top:4px;padding-bottom:4px}body[data-module="rollcall"] #draw-name{margin-top:0;margin-bottom:0;min-height:34px;font-size:28px}body[data-module="rollcall"] .room-scroll{padding-top:3px;padding-bottom:3px}}
 
 @media(max-height:850px){body[data-module="rollcall"] .seat.has-role .seat-status{line-height:10px}}
+
+.class-choice .class-rename{width:180px;height:40px;margin:0 8px 0 auto}
+.class-choice .grade-edit{margin-left:0}
+body[data-mode="student"] .podium,body[data-teacher="no"] .podium{margin:0 auto 12px}

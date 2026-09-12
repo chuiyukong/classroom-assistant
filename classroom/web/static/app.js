@@ -5,7 +5,7 @@
   if(document.getElementById('seating-nav')){document.getElementById('seating-nav').className='current';}
   var csrf = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
   var state = null, classId = '', historyId = '', seatButtons = {}, layoutId = '', selected = null;
-  var pending = null, busy = false, connected = false, version = 0, timer = null;
+  var pollBusy=false, pollFailures=0, pending = null, busy = false, connected = false, version = 0, timer = null;
   var profiles = [], classNames = {}, noteDirty = false, roleDirty = false;
   function el(id) { return document.getElementById(id); }
   function text(id, value) { el(id).textContent = value; }
@@ -34,11 +34,14 @@
   function buildMap(layout) {
     if (layoutId === layout.id) { return; }
     layoutId = layout.id; el('seat-map').textContent = ''; seatButtons = {};
-    for (var b = 1; b <= 4; b++) {
+    if(!teacher){var podium=el('seat-map').parentNode.querySelector('.podium');if(podium){podium.parentNode.insertBefore(podium,el('seat-map'));}}
+    for (var bi = 0; bi < 4; bi++) {
+      var b=teacher?bi+1:4-bi;
       var block = make('div', 'big-group'), lastGroup = '';
-      for (var row = 0; row < 8; row++) {
+      for (var ri = 0; ri < 8; ri++) {
+        var row=teacher?ri:7-ri;
         var rowSeats = layout.seats.filter(function (s) { return s.big_group === b && s.row === row; });
-        rowSeats.sort(function (a, c) { return a.column - c.column; });
+        rowSeats.sort(function (a, c) { return teacher?a.column-c.column:c.column-a.column; });
         if (rowSeats[0].group !== lastGroup) { lastGroup = rowSeats[0].group; block.appendChild(make('div', 'group-label', lastGroup)); }
         var line = make('div', 'seat-row');
         rowSeats.forEach(function (s) {
@@ -82,7 +85,7 @@
       var btn = seatButtons[s.number], item = record(s.number), config = device(s.number);
       if (config.disabled) { disabled++; } else if (!item) { available++; }
       btn.className = 'seat' + (item ? ' taken' : '') + (item && item.role ? ' has-role' : '') + (config.disabled ? ' unavailable' : '') + (s.number === selected ? ' chosen' : '');
-      btn.children[1].textContent = item ? item.name + (config.disabled ? '（停用）' : '') : (config.disabled ? '设备停用' : '空位');
+      btn.children[1].textContent = config.disabled ? '设备停用' : (item ? item.name : '空位');
       btn.querySelector('.role-badge').textContent=item?['','班长','课代表','班长·课代表'][item.role||0]:'';
       btn.title = s.number + ' 号 · ' + (item ? item.name : '未登记') + (config.disabled ? ' · 设备停用' : '');
       if (teacher) { btn.title += (config.note ? '\n设备：' + config.note : '') + (item && item.student_note ? '\n学生：' + item.student_note : ''); }
@@ -103,16 +106,19 @@
   }
   function poll() {
     clearTimeout(timer);
+    if(pollBusy){return;}pollBusy=true;
     var currentVersion = version;
     var url = teacher ? (classId ? '/api/v1/teacher/classes/' + classId + '/arrangement' + (historyId ? '?round_id=' + historyId : '') : '/api/v1/teacher/current') : '/api/v1/student/state';
     api('GET', url, null, function (err, data) {
-      if (currentVersion !== version) { return; }
+      pollBusy=false;
+      if (currentVersion !== version) { poll();return; }
       connect(!err);
       if (!err) {
         if (teacher && !classId) { data['class'] = null; data.round = null; data.registrations = []; data.count = 0; }
         render(data);
       }
-      timer = setTimeout(poll, err ? 2500 : 1000);
+      pollFailures=err?Math.min(pollFailures+1,4):0;
+      timer = setTimeout(poll,(err?Math.pow(2,pollFailures)*1000:1000)+Math.random()*250);
     });
   }
   function refresh() { version++; poll(); }

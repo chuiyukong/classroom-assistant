@@ -22,6 +22,16 @@ class AttendanceService:
             return None
         return dict(row)
 
+    def notification_context(self,db):
+        row=db.execute('SELECT id,round_id,started_at FROM lessons WHERE ended_at IS NULL AND attendance_started_at IS NOT NULL').fetchone()
+        if not row or row['round_id']!=self.seating.current_round_id(db) or datetime.fromisoformat(row['started_at']).astimezone().date()!=datetime.now().astimezone().date():return None
+        return row['id']
+
+    def notification_identity(self,db,lid,ip,client_id):
+        if self.notification_context(db)!=lid:return None
+        own=db.execute("SELECT student_id FROM attendance_entries WHERE lesson_id=? AND status IN ('present','late') AND (source_ip=? OR client_id=?)",(lid,normalize_ip(ip),client_id)).fetchone()
+        return own['student_id'] if own else None
+
     def running(self, db):
         row = db.execute('SELECT * FROM lessons WHERE ended_at IS NULL').fetchone()
         return dict(row) if row else None

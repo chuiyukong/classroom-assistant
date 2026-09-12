@@ -5,9 +5,10 @@
   var module = document.body.getAttribute('data-module'), state = null, arrangement = null;
   var historyId = '', correctionId = '', correctionLesson = '', recycled = false, drawing = false, busy = false;
   var moduleConnected = false, drawScope='all', correctionEmptySeat=null, rangeRevision=0;
-  var polling = false, selectedSeat = null, checkinLesson = null, serverOffset = 0, lastRequests = '';
+  var contextBusy=false, contextNext=0, pollNext=0, failures=0, polling = false, selectedSeat = null, checkinLesson = null, serverOffset = 0, lastRequests = '';
   var seatMap = el('attendance-map') ? new window.ClassroomSeatMap(el('attendance-map'), function(n){ if(!teacher){showCheckin(n);}else if(module==='attendance'){showCorrection(n);}else if(module==='rollcall'){toggleDrawStudent(n);} }) : null;
   var labels = {pending:'未签到', present:'已到', late:'迟到', leave:'请假', absent:'缺勤', long_leave:'长期请假'};
+  ['new-lesson','open-attendance','close-attendance','end-lesson','draw-button','checkin-button'].forEach(function(id){if(el(id)){el(id).disabled=true;}});
   function el(id) { return document.getElementById(id); }
   function put(id, s) { if (el(id)) { el(id).textContent = s; } }
   function make(tag, text, cls) { var n = document.createElement(tag); n.textContent = text || ''; n.className = cls || ''; return n; }
@@ -122,11 +123,11 @@
     }
   }
   function refresh() {
-    if (module === 'data' || polling) { return; }
+    if (module === 'data' || polling || Date.now()<pollNext) { return; }
     polling = true;
     var requested = historyId, requestedRange=rangeRevision, requestedScope=drawScope;
     api('GET', teacher ? (module==='rollcall' ? 'teacher/rollcall/current?scope='+encodeURIComponent(drawScope) : historyId ? 'teacher/lessons/' + historyId : 'teacher/lessons/current') : 'student/attendance', null, function (err, d) {
-      polling = false; moduleConnected=!err;
+      polling = false; moduleConnected=!err;failures=err?Math.min(failures+1,4):0;pollNext=Date.now()+(err?Math.pow(2,failures)*1000:0)+Math.random()*200;
       if (requested !== historyId || requestedRange!==rangeRevision || requestedScope!==drawScope) { return; }
       put('module-connection', err ? '状态：连接中断' : '状态：已连接');
       el('module-connection').className='connection'+(err?' offline':'');
@@ -137,13 +138,16 @@
     });
   }
   function context() {
+    if(contextBusy || Date.now()<contextNext){return;}contextBusy=true;
     api('GET', teacher ? 'teacher/current' : 'student/state', null, function (err, d) {
+      contextBusy=false;contextNext=Date.now()+(err?6000:0)+Math.random()*300;
       if (!err) { arrangement = d; put('active-class',d['class'] ? d['class'].name : '未选择上课班级'); if(!teacher){el('seating-nav').hidden=!(d.round && d.round.is_open);if(d.round && d.round.is_open){window.location.replace('/');}} }
     });
   }
+  window.addEventListener('classes-updated',function(){contextNext=0;context();});
   if (module === 'data') {
     var classData=[];
-    function renderClasses(){el('class-list').textContent='';classData.filter(function(c){return (!el('filter-year').value || String(c.year)===el('filter-year').value) && (!el('filter-semester').value || (c.semester||'unset')===el('filter-semester').value);}).forEach(function(c){var label=make('label','','class-choice'),check=document.createElement('input');check.type='checkbox';check.value=c.id;label.appendChild(check);label.appendChild(make('span',c.name+' · '+(c.graduation_year?c.graduation_year+'届':'未设置届数')+' · '+(c.year?c.year+'年 '+c.semester:'未设置学期')));var grade=make('input','','grade-edit');grade.type='number';grade.min=1900;grade.max=2200;grade.value=c.graduation_year||'';grade.placeholder='毕业届数';grade.setAttribute('aria-label',c.name+'毕业届数');label.appendChild(grade);var update=make('button','保存届数','secondary');update.type='button';update.onclick=function(e){e.preventDefault();save('teacher/classes/'+c.id+'/graduation',{graduation_year:Number(grade.value)||0},'PUT',function(){classes();var event=document.createEvent('Event');event.initEvent('classes-updated',true,true);window.dispatchEvent(event);});};label.appendChild(update);el('class-list').appendChild(label);});}
+    function renderClasses(){el('class-list').textContent='';classData.filter(function(c){return (!el('filter-year').value || String(c.year)===el('filter-year').value) && (!el('filter-semester').value || (c.semester||'unset')===el('filter-semester').value);}).forEach(function(c){var label=make('label','','class-choice'),check=document.createElement('input');check.type='checkbox';check.value=c.id;label.appendChild(check);label.appendChild(make('span',c.name+' · '+c.student_count+' 人 · '+(c.graduation_year?c.graduation_year+'届':'未设置届数')+' · '+(c.year?c.year+'年 '+c.semester:'未设置学期')));var rename=make('input','','class-rename');rename.value=c.name;rename.maxLength=40;rename.setAttribute('aria-label',c.name+'班级名称');label.appendChild(rename);var grade=make('input','','grade-edit');grade.type='number';grade.min=1900;grade.max=2200;grade.value=c.graduation_year||'';grade.placeholder='毕业届数';grade.setAttribute('aria-label',c.name+'毕业届数');label.appendChild(grade);var update=make('button','保存名称和届数','secondary');update.type='button';update.onclick=function(e){e.preventDefault();save('teacher/classes/'+c.id,{name:rename.value,graduation_year:Number(grade.value)||0},'PUT',function(){classes();var event=document.createEvent('Event');event.initEvent('classes-updated',true,true);window.dispatchEvent(event);});};label.appendChild(update);el('class-list').appendChild(label);});}
     el('filter-year').onchange=renderClasses;el('filter-semester').onchange=renderClasses;
     function classes() {
       api('GET', 'teacher/classes' + (recycled ? '?deleted=1' : ''), null, function (err, d) {
@@ -201,5 +205,5 @@
       api('POST','student/attendance',{lesson_id:checkinLesson,name:el('checkin-name').value,seat_no:selectedSeat,move_reason:reason},function(err){busy=false;if(err){put('checkin-error',err);}else{closeCheckin();message(reason?'签到成功，换座申请已提交':'签到成功');}refresh();});
     };
   }
-  context(); refresh(); setInterval(refresh, 1000); setInterval(context, 3000); setInterval(countdown,250);
+  setTimeout(function(){context();refresh();},Math.random()*400); setInterval(refresh, 1000); setInterval(context, 3000); setInterval(countdown,250);
 }());

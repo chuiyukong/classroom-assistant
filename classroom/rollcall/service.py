@@ -98,15 +98,12 @@ class RollCallService:
             event=self._announcement.copy() if self._announcement else None
         if not event or event['expires']<=time.time():
             return {'announcement':None}
-        data=self.current()
-        if data['context_id']!=event['context_id']:
-            return {'announcement':None}
-        if data['source']=='attendance':
-            own=self.attendance.state(True,ip,client_id)
-            student=own.get('my_student_id') if own.get('lesson') and 'attendance:'+own['lesson']['id']==event['context_id'] else None
-        else:
-            own=self.attendance.seating.active(client_id,ip)
-            student=next((r['student_id'] for r in own['registrations'] if r['seat_no']==own.get('my_seat')),None) if own.get('round') and 'seating:'+own['round']['id']==event['context_id'] else None
+        source,context=event['context_id'].split(':',1)
+        with self.database.connect() as db:
+            if source=='seating' and self.attendance.notification_context(db):
+                return {'announcement':None}
+            student=(self.attendance.notification_identity(db,context,ip,client_id) if source=='attendance'
+                     else self.attendance.seating.notification_identity(db,context,ip,client_id))
         if student!=event['student_id']:
             return {'announcement':None}
         return {'announcement':{'id':event['id'],'name':event['name'],'duration_ms':5000}}

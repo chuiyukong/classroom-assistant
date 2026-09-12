@@ -8,6 +8,7 @@ def app(tmp_path):
     instance = create_app(tmp_path / "data", bootstrap_key="test-bootstrap")
     instance.config["TESTING"] = True
     yield instance
+    instance.extensions['diagnostics'].close()
     for handler in list(instance.logger.handlers):
         if hasattr(handler, "baseFilename"):
             instance.logger.removeHandler(handler)

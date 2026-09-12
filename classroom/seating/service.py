@@ -30,6 +30,19 @@ class SeatingService:
                 # Archived layouts are immutable and retain the original export.
                 db.execute("UPDATE rounds SET layout_id='classroom-64-v2' WHERE layout_id='classroom-64-v1' AND archived_at IS NULL")
 
+    def current_round_id(self, db):
+        row=db.execute('SELECT r.id FROM rounds r JOIN classroom_state c ON c.active_class_id=r.class_id WHERE c.singleton=1 ORDER BY r.number DESC LIMIT 1').fetchone()
+        return row['id'] if row else None
+
+    def notification_identity(self, db, rid, ip, client_id):
+        if self.current_round_id(db)!=rid:return None
+        row=db.execute('SELECT student_id FROM registrations WHERE round_id=? AND (client_id=? OR (? AND source_ip=?)) ORDER BY seat_no LIMIT 1',(rid,client_id,self.limit_ip,normalize_ip(ip))).fetchone()
+        return row['student_id'] if row else None
+
+    def class_counts(self):
+        with self.database.connect() as db:
+            return {r['class_id']:r['n'] for r in db.execute("SELECT r.class_id,COUNT(g.id) n FROM rounds r LEFT JOIN registrations g ON g.round_id=r.id WHERE r.archived_at IS NULL GROUP BY r.class_id")}
+
     def rounds(self, class_id):
         with self.database.connect() as db:
             self._class(db, class_id)

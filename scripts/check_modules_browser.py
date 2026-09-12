@@ -116,6 +116,7 @@ def run():
                 browser.close();print('v1.8 browser passed: independent draws, one-minute deadline, signed status, modal correction, long leave, four-character fit, sidebar, automatic routing, recycle.')
         finally:
             server.close()
+            app.extensions['diagnostics'].close()
             for handler in list(app.logger.handlers):
                 if hasattr(handler,'baseFilename'):app.logger.removeHandler(handler);handler.close()
 

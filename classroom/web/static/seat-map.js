@@ -6,12 +6,15 @@
   SeatMap.prototype.layout=function (layout) {
     if (!layout || this.id===layout.id) { return; }
     this.id=layout.id; this.root.textContent=''; this.root.className='seat-map attendance-seat-map'; this.buttons={};
-    var self=this;
-    for(var b=1;b<=4;b++) {
+    var self=this,student=document.body.getAttribute('data-teacher')==='no';
+    if(student){var podium=this.root.parentNode.querySelector('.podium');if(podium){podium.parentNode.insertBefore(podium,this.root);}}
+    for(var bi=0;bi<4;bi++) {
+      var b=student?4-bi:bi+1;
       var block=make('div','big-group'),last='';
-      for(var row=0;row<8;row++) {
+      for(var ri=0;ri<8;ri++) {
+        var row=student?7-ri:ri;
         var seats=layout.seats.filter(function(s){return s.big_group===b && s.row===row;});
-        seats.sort(function(a,c){return a.column-c.column;});
+        seats.sort(function(a,c){return student?c.column-a.column:a.column-c.column;});
         if(!seats.length){continue;}
         if(seats[0].group!==last){last=seats[0].group;block.appendChild(make('div','group-label',last));}
         var line=make('div','seat-row');
@@ -33,7 +36,7 @@
       if(r && r.status && !moved){status=labels[r.status];state=r.status;}
       if(options.rollcall && !options.attendance){status=off?'设备停用':'';state=r?'taken':'empty';}
       btn.className='seat attendance-seat '+state+(r && r.role?' has-role':'')+(off?' unavailable':'')+(this.highlighted===n?' draw-highlight':'')+(r && (options.selected||[]).indexOf(r.student_id)!==-1?' manual-selected':'');
-      btn.querySelector('.name').textContent=r?r.name:'空位';btn.querySelector('.seat-status').textContent=status;
+      btn.querySelector('.name').textContent=off?'设备停用':(r?r.name:'空位');btn.querySelector('.seat-status').textContent=off?'':status;
       btn.querySelector('.role-badge').textContent=r?['','班长','课代表','班长·课代表'][r.role||0]:'';
       btn.disabled=!!options.blocked||(!!options.rollcall && !options.manual)||(!options.teacher && (off||signed));
       btn.setAttribute('aria-label',n+'号 '+(r?r.name:'空位')+' '+status);

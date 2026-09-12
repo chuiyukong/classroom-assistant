@@ -170,6 +170,7 @@ def run():
             server.close()
             server.task_dispatcher.shutdown()
             thread.join(timeout=3)
+            app.extensions['diagnostics'].close()
             for handler in list(app.logger.handlers):
                 if hasattr(handler, 'baseFilename'):
                     app.logger.removeHandler(handler)

@@ -56,10 +56,21 @@ def main():
     args = parser.parse_args()
     lock = None
     server = None
+    diagnostics = None
+    server_thread = None
+    monitor_thread = None
+    waitress_handler = None
     try:
         root, _, configured_port = prepare_data(args.data_dir)
         lock = InstanceLock(root)
         app = create_app(root)
+        diagnostics = app.extensions['diagnostics']
+        import logging
+        waitress_log = logging.getLogger('waitress')
+        from classroom.core.diagnostics import WaitressDiagnosticHandler
+        waitress_handler=WaitressDiagnosticHandler(diagnostics)
+        waitress_log.addHandler(waitress_handler)
+        waitress_log.setLevel(logging.INFO)
         port = args.port or configured_port
         if not 1024 <= port <= 65535:
             raise ValueError("端口须为 1024—65535 的整数")
@@ -69,16 +80,32 @@ def main():
         from waitress import create_server
         try:
             server = create_server(app, host="0.0.0.0", port=port, threads=12,
-                                   connection_limit=150, channel_timeout=30,
+                                   connection_limit=400, channel_timeout=10, cleanup_interval=5,
                                    max_request_body_size=16384)
         except OSError as error:
             raise RuntimeError(f"无法使用端口 {port}，可能已被占用。请修改数据目录的 settings.json 中 port 后重启。\n{error}")
+        def serve():
+            try:
+                server.run()
+            except BaseException as error:
+                diagnostics.event('server_loop_failed', error_type=type(error).__name__)
+                diagnostics.stacks('server_loop_failed')
+            finally:
+                diagnostics.status='服务已停止'
+                diagnostics.event('server_loop_stopped')
         if args.headless:
             print(json.dumps({"admin_url": admin, "student_urls": urls, "data_dir": str(root)}, ensure_ascii=True), flush=True)
-            server.run()
+            server_thread=threading.Thread(target=serve,name='classroom-server',daemon=True)
+            server_thread.start()
+            monitor_thread=threading.Thread(target=diagnostics.monitor,args=(server,server_thread,port,lan_addresses),name='classroom-monitor',daemon=True)
+            monitor_thread.start()
+            server_thread.join()
         else:
-            threading.Thread(target=server.run, daemon=True).start()
-            show_window(root, urls, admin, args.no_browser)
+            server_thread=threading.Thread(target=serve,name='classroom-server',daemon=True)
+            server_thread.start()
+            monitor_thread=threading.Thread(target=diagnostics.monitor,args=(server,server_thread,port,lan_addresses),name='classroom-monitor',daemon=True)
+            monitor_thread.start()
+            show_window(root, urls, admin, args.no_browser, diagnostics)
     except KeyboardInterrupt:
         pass
     except Exception as error:
@@ -91,25 +118,32 @@ def main():
         messagebox.showerror("智慧课堂综合平台无法启动", str(error), parent=window)
         window.destroy()
     finally:
+        if diagnostics:diagnostics.stop_event.set()
         if server:
             server.close()
             server.task_dispatcher.shutdown()
         if lock:
             lock.close()
+        if monitor_thread:monitor_thread.join(timeout=3)
+        if diagnostics:
+            logging.getLogger('waitress').removeHandler(waitress_handler)
+            diagnostics.event('shutdown')
+            diagnostics.close()
 
 
-def show_window(root, urls, admin, no_browser):
+def show_window(root, urls, admin, no_browser, diagnostics):
     import tkinter as tk
     from tkinter import messagebox
     win = tk.Tk()
     win.title("智慧课堂综合平台 v" + VERSION + " · 教师机")
-    win.geometry("650x445")
+    win.geometry("650x485")
     win.minsize(620, 420)
     win.configure(bg="#f1f4f6")
     font = ("Microsoft YaHei", 10)
     frame = tk.Frame(win, bg="#f1f4f6", padx=28, pady=22)
     frame.pack(fill="both", expand=True)
-    tk.Label(frame, text="智慧课堂综合平台正在运行", font=("Microsoft YaHei", 20, "bold"), bg="#f1f4f6", fg="#176d61").pack(anchor="w")
+    heading = tk.StringVar(value="智慧课堂综合平台 · 正在启动")
+    tk.Label(frame, textvariable=heading, font=("Microsoft YaHei", 20, "bold"), bg="#f1f4f6", fg="#176d61").pack(anchor="w")
     tk.Label(frame, text="1. 打开教师管理，选择班级并开始登记。\n2. 通过极域统一打开下方学生网址。\n3. 登记结束后，在教师管理中导出 Excel。", justify="left", font=font, bg="#f1f4f6", pady=14).pack(anchor="w")
     tk.Button(frame, text="打开教师管理", command=lambda: webbrowser.open(admin), bg="#176d61", fg="white", font=font, padx=20, pady=8, relief="flat").pack(anchor="w")
     tk.Label(frame, text="学生访问网址（多个地址时，请先从一台学生机测试）", font=font, bg="#f1f4f6", pady=9).pack(anchor="w")
@@ -131,6 +165,13 @@ def show_window(root, urls, admin, no_browser):
     win.protocol("WM_DELETE_WINDOW", stop)
     if not no_browser:
         win.after(400, lambda: webbrowser.open(admin))
+    health = tk.StringVar(value='正在检查服务…')
+    tk.Label(frame,textvariable=health,font=font,bg='#f1f4f6',fg='#995227').pack(anchor='w')
+    def update_health():
+        health.set(diagnostics.status)
+        heading.set('智慧课堂综合平台 · ' + ('运行正常' if diagnostics.status == '服务正常' else '请检查服务'))
+        win.after(1000,update_health)
+    update_health()
     win.mainloop()
 
 
